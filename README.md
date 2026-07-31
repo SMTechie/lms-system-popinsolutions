@@ -21,7 +21,7 @@ npm run dev
 Open:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3000
 ```
 
 ## Environment Variables
@@ -41,19 +41,19 @@ NEXT_PUBLIC_AUTH_BYPASS=false
 Generate Prisma client:
 
 ```bash
-npm --workspace @popin/web run db:generate
+npm run db:generate
 ```
 
 Apply migrations:
 
 ```bash
-npm --workspace @popin/web run db:migrate
+npm run db:migrate
 ```
 
 Seed demo data:
 
 ```bash
-npm --workspace @popin/web run db:seed
+npm run db:seed
 ```
 
 ## Vercel Deployment
@@ -62,7 +62,7 @@ This repo is ready to deploy to Vercel.
 
 Use these project settings:
 
-- Root Directory: `apps/web`
+- Root Directory: `.`
 - Framework Preset: `Next.js`
 - Install Command: `npm install`
 - Build Command: `npm run build`
@@ -76,8 +76,8 @@ Set these environment variables in Vercel:
 Notes:
 
 - Prisma client generation is automated during install and build.
-- Run `npm --workspace @popin/web run db:migrate` against the production database before the first production deploy, or from your release pipeline.
-- Run `npm --workspace @popin/web run db:seed` only if you want demo data in that environment.
+- Run `npm run db:migrate` against the production database before the first production deploy, or from your release pipeline.
+- Run `npm run db:seed` only if you want demo data in that environment.
 
 ## Scripts
 

@@ -1,0 +1,14 @@
+
+> popin-lms@0.0.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://10.10.20.21:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 4.4s
+ ○ Compiling /api/[...path] ...
+ ✓ Compiled /api/[...path] in 4.5s (361 modules)
+ GET /api/parent/children/learner-2/overview 401 in 10948ms
