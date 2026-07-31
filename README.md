@@ -87,3 +87,10 @@ npm run build
 npm run typecheck
 npm run lint
 ```
+
+
+
+
+admin@popin.school / ChangeMe123!
+parent@popin.school / ChangeMe123!
+teacher@popin.school / ChangeMe123!
