@@ -75,6 +75,33 @@ function FormField({
   );
 }
 
+function WorkspaceShortcut({
+  title,
+  description,
+  cta,
+  href,
+}: {
+  title: string;
+  description: string;
+  cta: string;
+  href: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-blue-100 bg-[linear-gradient(135deg,rgba(30,58,138,0.06),rgba(59,130,246,0.08),rgba(6,182,212,0.08))] p-4">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>
+      <button
+        onClick={() => {
+          if (typeof window !== 'undefined') window.location.href = href;
+        }}
+        className="mt-3 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+      >
+        {cta}
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsTabs() {
   const { branding, setBrandingLocal } = useBranding();
   const [activeTab, setActiveTab] = useState('Branding');
@@ -231,18 +258,36 @@ export default function SettingsTabs() {
 
   const tabContent: Record<string, React.ReactNode> = {
     'Email Config': (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label="SMTP Host" placeholder="smtp.gmail.com" />
-          <FormField label="SMTP Port" placeholder="587" />
-          <FormField label="Username" placeholder="noreply@school.edu" />
-          <FormField label="Password" type="password" placeholder="••••••••" />
-          <FormField label="From Name" defaultValue={schoolName} />
-          <FormField label="From Email" defaultValue="noreply@school.edu" />
+      <div className="space-y-6">
+        <WorkspaceShortcut
+          title="Email delivery is now managed in Communications"
+          description="Use the Communications workspace for Resend sender details, test email delivery, and live delivery logs. Keep this tab for policy-level guidance only."
+          cta="Open Communications"
+          href="/communications"
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Primary provider</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">Resend</p>
+            <p className="mt-1 text-xs text-gray-500">Transactional and campaign-ready delivery</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Default sender</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">{schoolName}</p>
+            <p className="mt-1 text-xs text-gray-500">Keep this aligned with your verified sending domain</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Failure mode</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">Safe skip</p>
+            <p className="mt-1 text-xs text-gray-500">The system avoids fake sends when credentials are missing</p>
+          </div>
         </div>
-        <div className="space-y-1">
-          <ToggleSwitch label="Enable TLS/SSL" defaultChecked={true} />
-          <ToggleSwitch label="Email Notifications" defaultChecked={true} />
+        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="space-y-1">
+            <ToggleSwitch label="Email notifications" defaultChecked={true} />
+            <ToggleSwitch label="Require verified sender domains" defaultChecked={true} />
+            <ToggleSwitch label="Retry transient delivery failures" defaultChecked={true} />
+          </div>
         </div>
       </div>
     ),
@@ -255,16 +300,35 @@ export default function SettingsTabs() {
     ),
     'Payments': (
       <div className="space-y-6">
-        <div className="space-y-1">
-          <ToggleSwitch label="PayFast" description="Accept card payments via PayFast" defaultChecked={true} />
-          <ToggleSwitch label="Ozow" description="Accept instant EFT via Ozow" defaultChecked={true} />
-          <ToggleSwitch label="Manual EFT" description="Allow manual bank transfer payments" defaultChecked={true} />
+        <WorkspaceShortcut
+          title="Gateway controls are now managed in Payments"
+          description="Use the Payments workspace for Paystack keys, callback routing, live or test mode, and verification oversight. This tab now reflects finance policy rather than raw credentials."
+          cta="Open Payments"
+          href="/payments"
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Primary route</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">Paystack / Manual EFT</p>
+            <p className="mt-1 text-xs text-gray-500">Supports live checkout and finance review</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Posting rule</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">Verified first</p>
+            <p className="mt-1 text-xs text-gray-500">Learner balances update only after confirmation</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Parent return path</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">Secure callback</p>
+            <p className="mt-1 text-xs text-gray-500">Parents come back through the verification screen</p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label="PayFast Merchant ID" placeholder="10000100" />
-          <FormField label="PayFast Merchant Key" placeholder="46f0cd694581a" />
-          <FormField label="Ozow Site Code" placeholder="TST-TST-001" />
-          <FormField label="Ozow Private Key" placeholder="••••••••••••" />
+        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="space-y-1">
+            <ToggleSwitch label="Online checkout enabled" defaultChecked={true} />
+            <ToggleSwitch label="Manual EFT enabled" defaultChecked={true} />
+            <ToggleSwitch label="Require verification before posting receipts" defaultChecked={true} />
+          </div>
         </div>
       </div>
     ),
@@ -282,6 +346,26 @@ export default function SettingsTabs() {
     ),
     'Integrations': (
       <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <WorkspaceShortcut
+            title="Communications workspace"
+            description="Manage Resend, Twilio SMS, WhatsApp channels, and recent delivery events."
+            cta="Open Communications"
+            href="/communications"
+          />
+          <WorkspaceShortcut
+            title="Payments workspace"
+            description="Manage Paystack, callback routing, live mode, and fee collection readiness."
+            cta="Open Payments"
+            href="/payments"
+          />
+          <WorkspaceShortcut
+            title="Identity integrations"
+            description="Manage external auth providers, SSO routing, and linked portal access."
+            cta="Open Identity"
+            href="/settings/identity-integrations"
+          />
+        </div>
         {loadingIntegration && <p className="text-sm text-gray-500">Loading integration settings...</p>}
         {integrationForm && (
           <>

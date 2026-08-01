@@ -34,6 +34,15 @@ export function getPermissionsForRole(role: string) {
     ];
   }
 
+  if (role === "STUDENT") {
+    return [
+      "student_portal:read",
+      "announcements:read",
+      "attendance:read",
+      "assessments:read"
+    ];
+  }
+
   return ["operations:read", "inventory:read", "requisitions:read", "tickets:read", "store:read"];
 }
 

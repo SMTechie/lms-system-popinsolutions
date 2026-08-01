@@ -46,7 +46,8 @@ export default function Login() {
         if (password !== confirmPassword) throw new Error('Passwords do not match.');
             return signup(email, password, name);
           })();
-      const fallbackRoute = result.role === 'PARENT' ? '/parent-portal' : '/';
+      const fallbackRoute =
+        result.role === 'PARENT' ? '/parent-portal' : result.role === 'STUDENT' ? '/student-portal' : '/';
       navigate(from !== '/' ? from : fallbackRoute, { replace: true });
     } catch (err: any) {
       setError(err.message || 'Unable to sign in');

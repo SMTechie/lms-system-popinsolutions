@@ -17,9 +17,14 @@ import PwaRegistration from './components/PwaRegistration';
 
 const Boards = lazy(() => import('./views/Boards'));
 const Analytics = lazy(() => import('./views/Analytics'));
+const AIAssist = lazy(() => import('./views/AIAssist'));
+const Payments = lazy(() => import('./views/Payments'));
 const Store = lazy(() => import('./views/Store'));
 const Discipline = lazy(() => import('./views/Discipline'));
+const Communications = lazy(() => import('./views/Communications'));
 const ParentPortal = lazy(() => import('./views/ParentPortal'));
+const ParentPaymentCallback = lazy(() => import('./views/ParentPaymentCallback'));
+const StudentPortal = lazy(() => import('./views/StudentPortal'));
 const TeacherPortal = lazy(() => import('./views/TeacherPortal'));
 const Settings = lazy(() => import('./views/Settings'));
 const Admissions = lazy(() => import('./views/Admissions'));
@@ -57,10 +62,17 @@ const App: React.FC = () => {
                 <Route path="/store" element={<Store />} />
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'PARENT']} />}>
                   <Route path="/parent-portal" element={<ParentPortal />} />
+                  <Route path="/parent-portal/payment-callback" element={<ParentPaymentCallback />} />
+                </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'STUDENT']} />}>
+                  <Route path="/student-portal" element={<StudentPortal />} />
                 </Route>
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'TEACHER']} />}>
                   <Route path="/" element={<Home />} />
                   <Route path="/boards" element={<Boards />} />
+                  <Route path="/ai-assist" element={<AIAssist />} />
+                  <Route path="/communications" element={<Communications />} />
+                  <Route path="/payments" element={<Payments />} />
                   <Route path="/requisitions" element={<Requisitions />} />
                   <Route path="/requisitions/new" element={<RequisitionCreate />} />
                   <Route path="/requisitions/:id" element={<RequisitionDetail />} />

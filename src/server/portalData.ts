@@ -472,6 +472,88 @@ export function defaultPortalData() {
     },
   ];
 
+  const communications = {
+    audiences: [
+      {
+        id: "audience-all-families",
+        name: "All families",
+        type: "SYSTEM",
+        filters: { roles: ["PARENT"], grades: [], classes: [], languages: [] },
+        memberCount: guardianLinks.length,
+      },
+      {
+        id: "audience-grade-8",
+        name: "Grade 8 families",
+        type: "GRADE",
+        filters: { grades: ["grade-8"], classes: [], languages: [] },
+        memberCount: guardianLinks.filter((link) => link.learnerId === "learner-1").length,
+      },
+    ],
+    campaigns: [
+      {
+        id: "campaign-1",
+        title: "Winter sports photo day",
+        audienceId: "audience-all-families",
+        status: "SENT",
+        channels: ["APP", "EMAIL"],
+        subject: "Winter sports photo day on Friday",
+        content:
+          "Learners participating in winter sports should arrive in full match kit for the official school photos.",
+        scheduledFor: "2026-07-29T06:30:00.000Z",
+        sentAt: "2026-07-29T06:30:00.000Z",
+        createdAt: "2026-07-28T14:00:00.000Z",
+        metrics: { recipients: 2, delivered: 2, opened: 1, failed: 0 },
+      },
+    ],
+    resources: [
+      {
+        id: "resource-1",
+        title: "Term 3 parent calendar",
+        type: "DOCUMENT",
+        category: "Calendar",
+        audienceId: "audience-all-families",
+        visibility: "PARENT_STUDENT",
+        url: "/docs/term-3-calendar.pdf",
+        updatedAt: "2026-07-27T10:00:00.000Z",
+      },
+    ],
+    calendar: [
+      {
+        id: "calendar-1",
+        title: "Inter-house athletics",
+        category: "Event",
+        location: "Main field",
+        startsAt: "2026-08-18T08:00:00.000Z",
+        endsAt: "2026-08-18T13:00:00.000Z",
+        audienceId: "audience-all-families",
+      },
+    ],
+    templates: [
+      {
+        id: "template-1",
+        name: "General school notice",
+        category: "Notice",
+        subject: "School notice",
+        content: "Dear families,\n\nPlease note the following school update.\n\nRegards,\nSchool office",
+      },
+    ],
+    deliveryLogs: [
+      {
+        id: "delivery-log-1",
+        campaignId: "campaign-1",
+        channel: "EMAIL",
+        audienceId: "audience-all-families",
+        recipient: "parent@popin.school",
+        recipientRole: "PARENT",
+        status: "DELIVERED",
+        provider: "RESEND",
+        providerMessageId: "seed-message-1",
+        openedAt: "2026-07-29T07:12:00.000Z",
+        createdAt: "2026-07-29T06:30:00.000Z",
+      },
+    ],
+  };
+
   const boards = [
     {
       id: "board-procurement",
@@ -640,6 +722,20 @@ export function defaultPortalData() {
           reference: "CARD-992001",
           paidAt: "2026-07-04T14:15:00.000Z",
           status: "VERIFIED",
+        },
+      ],
+      paymentPlans: [
+        {
+          id: "payment-plan-1",
+          learnerId: "learner-1",
+          title: "Term 3 family arrangement",
+          instalmentAmount: 1200,
+          frequency: "MONTHLY",
+          startDate: "2026-08-05",
+          endDate: "2026-10-05",
+          status: "ACTIVE",
+          balance: 3600,
+          notes: "Approved by finance office.",
         },
       ],
       attendance: [
@@ -821,6 +917,7 @@ export function defaultPortalData() {
     hostel,
     disciplinary,
     identityProviders,
+    communications,
     activity,
     notifications,
     boards,

@@ -81,6 +81,7 @@ export default function ParentPortal() {
   const [loadingChildren, setLoadingChildren] = useState(true);
   const [loadingContext, setLoadingContext] = useState(false);
   const [loadingModule, setLoadingModule] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
   const [paymentDraft, setPaymentDraft] = useState({ feeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '' });
   const [appointmentDraft, setAppointmentDraft] = useState({
     title: '',
@@ -260,6 +261,28 @@ export default function ParentPortal() {
     if (!selectedId) return;
     if (!paymentDraft.feeId || !paymentDraft.amount) {
       notifyAction('Choose a fee record and enter the payment amount.', 'error');
+      return;
+    }
+    if (paymentDraft.method === 'PAYSTACK') {
+      setStartingCheckout(true);
+      try {
+        const response = await apiRequest<{ authorizationUrl?: string }>(`/parent/children/${selectedId}/fees/payments/checkout`, {
+          method: 'POST',
+          body: JSON.stringify({
+            ...paymentDraft,
+            amount: Number(paymentDraft.amount),
+          }),
+        });
+        if (!response.authorizationUrl) {
+          throw new Error('The payment gateway did not return a checkout URL.');
+        }
+        window.location.href = response.authorizationUrl;
+        return;
+      } catch (error: any) {
+        notifyAction(error.message || 'Could not start online checkout.', 'error');
+      } finally {
+        setStartingCheckout(false);
+      }
       return;
     }
     try {
@@ -533,6 +556,7 @@ export default function ParentPortal() {
       const summary = moduleData?.summary || { total: 0, paid: 0, outstanding: 0 };
       const items = Array.isArray(moduleData?.items) ? moduleData.items : [];
       const payments = Array.isArray(moduleData?.payments) ? moduleData.payments : [];
+      const gateway = moduleData?.gateway || null;
       return (
         <div className="space-y-5">
           <div className="grid gap-3 md:grid-cols-3">
@@ -540,6 +564,43 @@ export default function ParentPortal() {
             <MetricCard label="Paid" value={`R ${Number(summary.paid || 0).toFixed(2)}`} />
             <MetricCard label="Outstanding" value={`R ${Number(summary.outstanding || 0).toFixed(2)}`} />
           </div>
+          <SectionCard title="Payment options">
+            <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Collections summary</p>
+                <h4 className="mt-2 text-lg font-bold text-slate-950">Choose the payment route that fits this family</h4>
+                <p className="mt-2 text-sm text-slate-600">
+                  Manual payments remain available for EFT and cash proof, while live checkout can redirect to the school's online gateway when enabled.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {['Manual EFT', 'Card reference', 'Cash office capture', ...(gateway?.enabled && gateway?.provider === 'PAYSTACK' ? ['Online checkout'] : [])].map((label) => (
+                    <span key={label} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className={`rounded-2xl border p-4 ${gateway?.enabled ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Gateway status</p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-bold text-slate-950">{gateway?.provider || 'Manual only'}</p>
+                    <p className="text-sm text-slate-600">
+                      {gateway?.enabled ? `${String(gateway?.mode || 'manual').toUpperCase()} mode` : 'Online payments are currently disabled'}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${gateway?.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                    {gateway?.enabled ? 'Ready' : 'Offline'}
+                  </span>
+                </div>
+                <p className="mt-4 text-xs text-slate-500">
+                  {gateway?.enabled && gateway?.provider === 'PAYSTACK'
+                    ? 'Paystack checkout will open in a secure payment page and return here automatically.'
+                    : 'Use the manual submission flow below and wait for school verification.'}
+                </p>
+              </div>
+            </div>
+          </SectionCard>
           <SectionCard title="Fee items">
             {items.length ? (
               <div className="space-y-3">
@@ -583,7 +644,12 @@ export default function ParentPortal() {
               </Field>
               <Field label="Method">
                 <select className={inputClass} value={paymentDraft.method} onChange={(event) => setPaymentDraft((current) => ({ ...current, method: event.target.value }))}>
-                  {['EFT', 'CARD', 'CASH'].map((method) => (
+                  {[
+                    'EFT',
+                    'CARD',
+                    'CASH',
+                    ...(moduleData?.gateway?.enabled && moduleData?.gateway?.provider === 'PAYSTACK' ? ['PAYSTACK'] : []),
+                  ].map((method) => (
                     <option key={method}>{method}</option>
                   ))}
                 </select>
@@ -591,12 +657,18 @@ export default function ParentPortal() {
               <Field label="Reference">
                 <input className={inputClass} value={paymentDraft.reference} onChange={(event) => setPaymentDraft((current) => ({ ...current, reference: event.target.value }))} />
               </Field>
-              <Field label="Proof file name">
-                <input className={inputClass} value={paymentDraft.proofFileName} onChange={(event) => setPaymentDraft((current) => ({ ...current, proofFileName: event.target.value }))} placeholder="proof-july.pdf" />
-              </Field>
+              {paymentDraft.method !== 'PAYSTACK' ? (
+                <Field label="Proof file name">
+                  <input className={inputClass} value={paymentDraft.proofFileName} onChange={(event) => setPaymentDraft((current) => ({ ...current, proofFileName: event.target.value }))} placeholder="proof-july.pdf" />
+                </Field>
+              ) : (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 md:col-span-2">
+                  You will be redirected to Paystack to complete this payment securely. Once the transaction succeeds, the portal will verify it and update the learner record automatically.
+                </div>
+              )}
             </div>
-            <button onClick={() => void submitPayment()} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">
-              Submit payment
+            <button onClick={() => void submitPayment()} disabled={startingCheckout} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+              {paymentDraft.method === 'PAYSTACK' ? (startingCheckout ? 'Opening checkout...' : 'Pay online') : 'Submit payment'}
             </button>
           </SectionCard>
           <SectionCard title="Payment history">
@@ -1238,9 +1310,12 @@ function PaymentList({ items }: { items: any[] }) {
                 {item.reference} / {item.proofFileName || 'No proof file name provided'}
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{item.status}</span>
+            <span className={`rounded-full px-2 py-1 text-xs font-bold ${item.status === 'VERIFIED' ? 'bg-emerald-50 text-emerald-700' : item.status === 'REJECTED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{item.status}</span>
           </div>
           <p className="mt-2 text-xs text-slate-500">{new Date(item.paidAt).toLocaleString()}</p>
+          <p className="mt-2 text-xs text-slate-600">
+            {item.method === 'PAYSTACK' ? 'Processed through online checkout.' : 'Submitted to the school for finance review.'}
+          </p>
         </div>
       ))}
     </div>

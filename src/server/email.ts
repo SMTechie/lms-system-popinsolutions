@@ -128,3 +128,24 @@ export function renderDisciplineEmail(input: {
     text: `A disciplinary item has been logged for ${input.learnerName}: ${input.incidentTitle} (${input.category}, ${input.severity}). Review it here: ${input.portalUrl}`,
   };
 }
+
+export function renderCommunicationCampaignEmail(input: {
+  title: string;
+  subject: string;
+  content: string;
+  schoolName?: string;
+}) {
+  const heading = input.subject || input.title || "School communication";
+  const schoolName = input.schoolName || "POPIN School";
+  return {
+    subject: heading,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
+        <p style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #2563eb;">${schoolName}</p>
+        <h2>${heading}</h2>
+        <p>${String(input.content || "").replace(/\n/g, "<br/>")}</p>
+      </div>
+    `,
+    text: `${schoolName}\n\n${heading}\n\n${input.content}`,
+  };
+}

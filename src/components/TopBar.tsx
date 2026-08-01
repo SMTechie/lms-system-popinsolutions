@@ -8,8 +8,10 @@ import {
   ExternalLink,
   LogOut,
   Menu,
+  MessageCircleCode,
   PackageCheck,
   Plus,
+  ReceiptText,
   Search,
   Settings,
   ShoppingCart,
@@ -72,16 +74,20 @@ const allSearchTargets = [
   { label: 'Dashboard', route: '/' },
   { label: 'Analytics', route: '/analytics' },
   { label: 'Boards', route: '/boards' },
+  { label: 'AI Assist', route: '/ai-assist' },
   { label: 'Requisitions', route: '/requisitions' },
   { label: 'Supply Chain', route: '/supply-chain' },
   { label: 'Inventory', route: '/inventory' },
   { label: 'Uniform Store', route: '/store' },
   { label: 'Tickets', route: '/tickets' },
   { label: 'Disciplinary Module', route: '/discipline' },
+  { label: 'Communications', route: '/communications' },
+  { label: 'Payments', route: '/payments' },
   { label: 'Admissions', route: '/admissions' },
   { label: 'Students', route: '/students' },
   { label: 'Hostel', route: '/hostel' },
   { label: 'Parent Portal', route: '/parent-portal' },
+  { label: 'Student Portal', route: '/student-portal' },
   { label: 'Teacher Portal', route: '/teacher-portal' },
   { label: 'Settings', route: '/settings' },
   { label: 'Identity Integrations', route: '/settings/identity-integrations' },
@@ -119,10 +125,12 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
     .slice(0, 2)
     .toUpperCase();
   const unreadCount = notifications.filter((item) => !item.read).length;
-  const allowQuickCreate = role !== 'PARENT';
+  const allowQuickCreate = !['PARENT', 'STUDENT'].includes(role);
   const searchTargets =
     role === 'PARENT'
       ? allSearchTargets.filter((item) => ['/parent-portal', '/store'].includes(item.route))
+      : role === 'STUDENT'
+        ? allSearchTargets.filter((item) => ['/student-portal', '/store'].includes(item.route))
       : allSearchTargets;
 
   const searchResults = useMemo(() => {
@@ -143,12 +151,18 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
   }, []);
 
   useEffect(() => {
-    apiRequest<NotificationItem[]>('/admin/notifications')
+    const endpoint =
+      role === 'PARENT'
+        ? '/parent/notifications'
+        : role === 'STUDENT'
+          ? '/student/notifications'
+          : '/admin/notifications';
+    apiRequest<NotificationItem[]>(endpoint)
       .then((items) => setNotifications((Array.isArray(items) ? items : []).map(withNotificationRoute)))
       .catch(() => {
         setNotifications([]);
       });
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -301,7 +315,13 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
                       onClick={async () => {
                         setNotifications((current) => current.map((item) => ({ ...item, read: true })));
                         try {
-                          const items = await apiRequest<NotificationItem[]>('/admin/notifications/read-all', { method: 'POST' });
+                          const endpoint =
+                            role === 'PARENT'
+                              ? '/parent/notifications/read-all'
+                              : role === 'STUDENT'
+                                ? '/student/notifications/read-all'
+                                : '/admin/notifications/read-all';
+                          const items = await apiRequest<NotificationItem[]>(endpoint, { method: 'POST' });
                           setNotifications((Array.isArray(items) ? items : []).map(withNotificationRoute));
                         } catch {
                           // keep optimistic state
@@ -440,16 +460,29 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
             </div>
           </div>
           <div className="flex justify-end">
-            <button
-              onClick={() => {
-                setActiveModal(null);
-                navigate('/settings');
-              }}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
-            >
-              Open Settings
-              <ExternalLink className="h-4 w-4" />
-            </button>
+            {role !== 'STUDENT' ? (
+              <button
+                onClick={() => {
+                  setActiveModal(null);
+                  navigate('/settings');
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+              >
+                Open Settings
+                <ExternalLink className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setActiveModal(null);
+                  navigate('/student-portal');
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+              >
+                Open Portal
+                <ExternalLink className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </Modal>
@@ -502,11 +535,11 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
             <button
               onClick={() => {
                 setActiveModal(null);
-                navigate('/settings/identity-integrations');
+                navigate(role === 'STUDENT' ? '/student-portal' : '/settings/identity-integrations');
               }}
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             >
-              Open Support Tools
+              {role === 'STUDENT' ? 'Return to Portal' : 'Open Support Tools'}
             </button>
           </div>
         </div>

@@ -57,6 +57,7 @@ function createCleanPortalData(input: {
     },
     fees: [],
     payments: [],
+    paymentPlans: [],
     attendance: [],
     appointments: [],
     reports: [],
@@ -114,6 +115,14 @@ function createCleanPortalData(input: {
   };
 
   data.disciplinary = { records: [] };
+  data.communications = {
+    audiences: [],
+    campaigns: [],
+    resources: [],
+    calendar: [],
+    templates: [],
+    deliveryLogs: [],
+  };
   data.activity = [];
   data.notifications = [];
   data.boards = [];

@@ -19,14 +19,16 @@ import {
 } from "@/src/server/portalData";
 import { hashPassword, requireCurrentUserFromHeader } from "@/src/server/auth";
 import {
+  renderCommunicationCampaignEmail,
   renderDisciplineEmail,
   renderGuardianLinkedEmail,
   renderTeacherWelcomeEmail,
   sendTransactionalEmail,
 } from "@/src/server/email";
+import { initializePaystackTransaction, sendTwilioMessage, verifyPaystackTransaction } from "@/src/server/providers";
 import { prisma } from "@/src/server/prisma";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
-import { appendAuditLog } from "@/src/server/settings";
+import { appendAuditLog, getSetting, putSetting } from "@/src/server/settings";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
@@ -69,6 +71,7 @@ async function handle(request: NextRequest, { params }: RouteContext) {
     if (path[0] === "boards") return handleBoards(request, method, path, data, operations, user);
     if (path[0] === "parent") return handleParent(request, method, path, data, user);
     if (path[0] === "teacher") return handleTeacher(request, method, path, data, operations, user);
+    if (path[0] === "student") return handleStudent(request, method, path, data, user);
     if (path[0] === "teacher-assistant") return handleTeacherAssistant(request, method, path, data, user);
     if (path[0] === "students") return handleStudents(request, method, path, data, user);
     if (path[0] === "hostel") return handleHostel(request, method, path, data, user);
@@ -208,6 +211,429 @@ function addParentHostelNotification(data: any, learnerId: string, title: string
   });
 }
 
+function ensureCommunicationsData(data: any) {
+  data.communications = data.communications || {};
+  data.communications.audiences = data.communications.audiences || [];
+  data.communications.campaigns = data.communications.campaigns || [];
+  data.communications.resources = data.communications.resources || [];
+  data.communications.calendar = data.communications.calendar || [];
+  data.communications.templates = data.communications.templates || [];
+  data.communications.deliveryLogs = data.communications.deliveryLogs || [];
+
+  if (!data.communications.audiences.length) {
+    data.communications.audiences = [
+      {
+        id: uid("audience"),
+        name: "All families",
+        type: "SYSTEM",
+        filters: { roles: ["PARENT"], grades: [], classes: [], languages: [] },
+        memberCount: Math.max(
+          data.learners.reduce((sum: number, learner: any) => sum + (learner.guardians || []).length, 0),
+          0,
+        ),
+      },
+      {
+        id: uid("audience"),
+        name: "All learners",
+        type: "SYSTEM",
+        filters: { roles: ["STUDENT"], grades: [], classes: [], languages: [] },
+        memberCount: data.learners.length,
+      },
+    ];
+  }
+}
+
+function defaultCommunicationProviders() {
+  return {
+    email: { provider: "RESEND", enabled: true, fromAddress: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev" },
+    sms: {
+      provider: "NONE",
+      enabled: false,
+      senderId: "POPIN",
+      callbackUrl: "",
+      accountSid: process.env.TWILIO_ACCOUNT_SID || "",
+      authToken: process.env.TWILIO_AUTH_TOKEN || "",
+      fromNumber: process.env.TWILIO_FROM_NUMBER || "",
+      messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID || "",
+    },
+    whatsapp: {
+      provider: "NONE",
+      enabled: false,
+      businessAccountId: "",
+      templateNamespace: "",
+      accountSid: process.env.TWILIO_ACCOUNT_SID || "",
+      authToken: process.env.TWILIO_AUTH_TOKEN || "",
+      fromNumber: process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886",
+      messagingServiceSid: "",
+      callbackUrl: "",
+    },
+    push: { provider: "PWA", enabled: true, vapidConfigured: false },
+  };
+}
+
+function defaultPaymentGateways() {
+  return {
+    primary: {
+      provider: "MANUAL_EFT",
+      enabled: true,
+      mode: "manual",
+      merchantId: "",
+      publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+      secretKey: process.env.PAYSTACK_SECRET_KEY || "",
+      callbackUrl: "",
+      currency: "ZAR",
+    },
+    alternatives: [
+      {
+        provider: "PAYSTACK",
+        enabled: false,
+        mode: "test",
+        merchantId: "",
+        publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+        secretKey: process.env.PAYSTACK_SECRET_KEY || "",
+        callbackUrl: "",
+        currency: "ZAR",
+      },
+      { provider: "PAYFAST", enabled: false, mode: "test", merchantId: "", publicKey: "", callbackUrl: "" },
+    ],
+  };
+}
+
+function resolveAudienceRecipients(data: any, audienceId: string | null) {
+  const audience = (data.communications?.audiences || []).find((item: any) => item.id === audienceId) || null;
+  if (!audience) return [];
+  const roleSet = new Set<string>(audience.filters?.roles || []);
+  const recipients: Array<{ role: string; email: string; name: string; learnerId?: string | null; phone?: string | null }> = [];
+
+  if (!roleSet.size || roleSet.has("PARENT")) {
+    for (const learner of data.learners || []) {
+      for (const link of learner.guardians || []) {
+        if (link.guardian?.email) {
+          recipients.push({
+            role: "PARENT",
+            email: String(link.guardian.email).toLowerCase(),
+            name: link.guardian.name || "Parent",
+            learnerId: learner.id,
+            phone:
+              link.guardian.phone ||
+              (String(link.guardian.email).toLowerCase() === String(data.parent?.guardianEmail || "").toLowerCase()
+                ? data.parent?.profile?.phone || ""
+                : ""),
+          });
+        }
+      }
+    }
+  }
+
+  if (roleSet.has("STUDENT")) {
+    for (const learner of data.learners || []) {
+      if (learner.email) {
+        recipients.push({
+          role: "STUDENT",
+          email: String(learner.email).toLowerCase(),
+          name: `${learner.firstName || ""} ${learner.lastName || ""}`.trim() || "Learner",
+          learnerId: learner.id,
+          phone: learner.phone || "",
+        });
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  return recipients.filter((item) => {
+    const key = `${item.role}:${item.email}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getBaseUrl(request: NextRequest) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
+  if (configured) return configured.replace(/\/$/, "");
+  return request.nextUrl.origin;
+}
+
+function applyPaymentToFee(data: any, payment: any) {
+  const fee = (data.parent?.fees || []).find((item: any) => item.id === payment.feeId && item.learnerId === payment.learnerId);
+  if (!fee) return;
+  if (payment.appliedAt) return;
+  fee.paidAmount = Math.min(Number(fee.amount || 0), Number(fee.paidAmount || 0) + Number(payment.amount || 0));
+  fee.status = Number(fee.paidAmount || 0) >= Number(fee.amount || 0) ? "PAID" : Number(fee.paidAmount || 0) > 0 ? "PARTIAL" : "UNPAID";
+  payment.appliedAt = new Date().toISOString();
+}
+
+async function deliverCampaign(data: any, campaign: any, actor: any) {
+  ensureCommunicationsData(data);
+  const providers = await getSetting("communication-providers", defaultCommunicationProviders());
+  const recipients = resolveAudienceRecipients(data, campaign.audienceId);
+  const now = new Date().toISOString();
+  const logs: any[] = [];
+  let delivered = 0;
+  let failed = 0;
+
+  if ((campaign.channels || []).includes("EMAIL")) {
+    const emailTemplate = renderCommunicationCampaignEmail({
+      title: campaign.title,
+      subject: campaign.subject,
+      content: campaign.content,
+      schoolName: "POPIN School",
+    });
+    for (const recipient of recipients) {
+      const result = await sendTransactionalEmail({
+        to: recipient.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
+      });
+      const status = result.ok ? "DELIVERED" : result.skipped ? "SKIPPED" : "FAILED";
+      if (result.ok) delivered += 1;
+      if (!result.ok && !result.skipped) failed += 1;
+      logs.push({
+        id: uid("delivery-log"),
+        campaignId: campaign.id,
+        channel: "EMAIL",
+        audienceId: campaign.audienceId || null,
+        recipient: recipient.email,
+        recipientRole: recipient.role,
+        learnerId: recipient.learnerId || null,
+        status,
+        provider: providers.email?.provider || "RESEND",
+        providerMessageId: result.id || null,
+        error: result.error || null,
+        openedAt: result.ok ? null : null,
+        createdAt: now,
+      });
+    }
+  }
+
+  for (const channel of (campaign.channels || []).filter((item: string) => item !== "EMAIL")) {
+    for (const recipient of recipients) {
+      if (channel === "SMS" || channel === "WHATSAPP") {
+        const providerConfig = channel === "SMS" ? providers.sms || {} : providers.whatsapp || {};
+        if (!recipient.phone) {
+          failed += 1;
+          logs.push({
+            id: uid("delivery-log"),
+            campaignId: campaign.id,
+            channel,
+            audienceId: campaign.audienceId || null,
+            recipient: recipient.email,
+            recipientRole: recipient.role,
+            learnerId: recipient.learnerId || null,
+            status: "FAILED",
+            provider: providerConfig.provider || "NONE",
+            providerMessageId: null,
+            error: "Recipient phone number is missing.",
+            openedAt: null,
+            createdAt: now,
+          });
+          continue;
+        }
+
+        const twilioResult =
+          providerConfig.provider === "TWILIO"
+            ? await sendTwilioMessage({
+                to: recipient.phone,
+                body: campaign.content || campaign.subject || campaign.title,
+                channel,
+                accountSid: providerConfig.accountSid,
+                authToken: providerConfig.authToken,
+                fromNumber: providerConfig.fromNumber,
+                messagingServiceSid: providerConfig.messagingServiceSid,
+                statusCallbackUrl: providerConfig.callbackUrl,
+              })
+            : { ok: false, skipped: true, error: `${channel} provider is not connected yet.` };
+        const status = twilioResult.ok ? "DELIVERED" : twilioResult.skipped ? "SKIPPED" : "FAILED";
+        if (twilioResult.ok) delivered += 1;
+        if (!twilioResult.ok && !twilioResult.skipped) failed += 1;
+        logs.push({
+          id: uid("delivery-log"),
+          campaignId: campaign.id,
+          channel,
+          audienceId: campaign.audienceId || null,
+          recipient: recipient.phone,
+          recipientRole: recipient.role,
+          learnerId: recipient.learnerId || null,
+          status,
+          provider: providerConfig.provider || "NONE",
+          providerMessageId: twilioResult.id || null,
+          error: twilioResult.error || null,
+          openedAt: null,
+          createdAt: now,
+        });
+        continue;
+      }
+
+      logs.push({
+        id: uid("delivery-log"),
+        campaignId: campaign.id,
+        channel,
+        audienceId: campaign.audienceId || null,
+        recipient: recipient.email,
+        recipientRole: recipient.role,
+        learnerId: recipient.learnerId || null,
+        status: channel === "APP" ? "DELIVERED" : "PENDING_PROVIDER_SETUP",
+        provider:
+          channel === "SMS"
+            ? providers.sms?.provider || "NONE"
+            : channel === "WHATSAPP"
+              ? providers.whatsapp?.provider || "NONE"
+              : providers.push?.provider || "PWA",
+        providerMessageId: null,
+        error: channel === "APP" ? null : `${channel} provider is not connected yet.`,
+        openedAt: null,
+        createdAt: now,
+      });
+      if (channel === "APP") delivered += 1;
+    }
+  }
+
+  data.communications.deliveryLogs.unshift(...logs);
+  campaign.status = "SENT";
+  campaign.sentAt = now;
+  campaign.lastDeliveryAt = now;
+  campaign.metrics = {
+    recipients: recipients.length * Math.max((campaign.channels || []).length, 1),
+    delivered,
+    opened: Math.max(Math.floor(delivered * 0.45), 0),
+    failed,
+  };
+
+  await appendAuditLog({
+    action: "DELIVER",
+    entity: "Campaign",
+    entityId: campaign.id,
+    actorId: actor?.email,
+    metadata: {
+      campaignId: campaign.id,
+      title: campaign.title,
+      delivered,
+      failed,
+      channels: campaign.channels,
+    },
+  });
+}
+
+function resolveStudentLearner(data: any, user: any, request: NextRequest) {
+  if (user.role === "ADMIN") {
+    const learnerId = request.nextUrl.searchParams.get("learnerId") || "";
+    if (learnerId) return data.learners.find((item: any) => item.id === learnerId) || null;
+    return data.learners[0] || null;
+  }
+  return data.learners.find((item: any) => String(item.email || "").toLowerCase() === user.email?.toLowerCase()) || null;
+}
+
+function buildAdminAssistantResponse(data: any, prompt: string) {
+  const fees = data.parent?.fees || [];
+  const payments = data.parent?.payments || [];
+  const plans = data.parent?.paymentPlans || [];
+  const attendance = data.parent?.attendance || [];
+  const campaigns = data.communications?.campaigns || [];
+  const hostelEvents = data.hostel?.scanEvents || [];
+  const discipline = data.disciplinary?.records || [];
+  const applications = data.applications?.forms?.flatMap((form: any) => form.submissions || []) || [];
+
+  if (prompt.includes("balance") || prompt.includes("fee") || prompt.includes("payment")) {
+    const outstanding = fees.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
+    const pending = payments.filter((item: any) => item.status === "PENDING_VERIFICATION");
+    return {
+      answer: `Finance snapshot prepared. There is R ${outstanding.toFixed(2)} still outstanding across school accounts, with ${pending.length} payment submission(s) waiting for verification.`,
+      bullets: [
+        `${plans.filter((item: any) => item.status === "ACTIVE").length} payment plan(s) are currently active.`,
+        `${payments.filter((item: any) => item.status === "VERIFIED").length} payment(s) have already been verified.`,
+        `${pending.length} submitted payment(s) still need finance review.`,
+      ],
+      metrics: [
+        { label: "Outstanding", value: `R ${outstanding.toFixed(2)}` },
+        { label: "Pending verification", value: String(pending.length) },
+        { label: "Active plans", value: String(plans.filter((item: any) => item.status === "ACTIVE").length) },
+      ],
+    };
+  }
+
+  if (prompt.includes("attendance") || prompt.includes("absent") || prompt.includes("late")) {
+    const risk = attendance.filter((item: any) => ["ABSENT", "LATE"].includes(item.status));
+    const byLearner = new Map<string, number>();
+    for (const item of risk) byLearner.set(item.learnerId, (byLearner.get(item.learnerId) || 0) + 1);
+    const top = Array.from(byLearner.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([learnerId, count]) => `${learnerName(data, learnerId)} (${count})`);
+    return {
+      answer: `Attendance review complete. ${risk.length} recent attendance records are marked absent or late.`,
+      bullets: top.length ? top : ["No high-risk learner pattern was found in the current attendance data."],
+      metrics: [
+        { label: "Attendance risk items", value: String(risk.length) },
+        { label: "Absences", value: String(attendance.filter((item: any) => item.status === "ABSENT").length) },
+        { label: "Late arrivals", value: String(attendance.filter((item: any) => item.status === "LATE").length) },
+      ],
+    };
+  }
+
+  if (prompt.includes("campaign") || prompt.includes("communication") || prompt.includes("message")) {
+    return {
+      answer: `Communications review complete. ${campaigns.filter((item: any) => item.status === "SENT").length} campaign(s) have already been sent and ${campaigns.filter((item: any) => item.status === "SCHEDULED").length} remain scheduled.`,
+      bullets: campaigns.slice(0, 3).map((item: any) => `${item.title} / ${item.status} / ${item.channels.join(", ")}`),
+      metrics: [
+        { label: "Campaigns", value: String(campaigns.length) },
+        { label: "Scheduled", value: String(campaigns.filter((item: any) => item.status === "SCHEDULED").length) },
+        { label: "Sent", value: String(campaigns.filter((item: any) => item.status === "SENT").length) },
+      ],
+    };
+  }
+
+  if (prompt.includes("hostel") || prompt.includes("meal") || prompt.includes("scan")) {
+    return {
+      answer: `Hostel activity summary ready. ${hostelEvents.length} hostel scan event(s) are in the current dataset.`,
+      bullets: hostelEvents.slice(0, 3).map((item: any) => `${learnerName(data, item.learnerId)} / ${item.eventType} / ${new Date(item.scannedAt).toLocaleString("en-ZA")}`),
+      metrics: [
+        { label: "Scans", value: String(hostelEvents.length) },
+        { label: "Residents", value: String(residentsCountFromHostel(data)) },
+        { label: "Incidents", value: String((data.hostel?.incidents || []).length) },
+      ],
+    };
+  }
+
+  if (prompt.includes("discipline")) {
+    return {
+      answer: `Discipline review complete. ${discipline.length} record(s) are currently stored, with ${discipline.filter((item: any) => item.status === "OPEN").length} still open.`,
+      bullets: discipline.slice(0, 3).map((item: any) => `${learnerName(data, item.learnerId)} / ${item.title} / ${item.severity}`),
+      metrics: [
+        { label: "Open", value: String(discipline.filter((item: any) => item.status === "OPEN").length) },
+        { label: "Resolved", value: String(discipline.filter((item: any) => item.status === "RESOLVED").length) },
+        { label: "Awaiting parent acknowledgement", value: String(discipline.filter((item: any) => item.requiresAcknowledgement && !item.parentAcknowledgedAt).length) },
+      ],
+    };
+  }
+
+  if (prompt.includes("admission") || prompt.includes("application")) {
+    return {
+      answer: `Admissions overview prepared. ${applications.length} application record(s) are currently available in the system.`,
+      bullets: applications.slice(0, 3).map((item: any) => `${item.applicantName || "Applicant"} / ${item.status} / ${item.submissionReference || "No reference"}`),
+      metrics: [
+        { label: "Applications", value: String(applications.length) },
+        { label: "Approved", value: String(applications.filter((item: any) => item.status === "APPROVED").length) },
+        { label: "Pending review", value: String(applications.filter((item: any) => ["SUBMITTED", "IN_REVIEW"].includes(item.status)).length) },
+      ],
+    };
+  }
+
+  return {
+    answer: "AI Assist is ready. Ask about finance, attendance, communications, hostel, discipline, or admissions and I will summarise the current school data for you.",
+    bullets: [
+      "Try: Which payments still need verification?",
+      "Try: Summarise attendance risk by learner.",
+      "Try: What communications are still scheduled?",
+    ],
+    metrics: [
+      { label: "Learners", value: String((data.learners || []).length) },
+      { label: "Campaigns", value: String((data.communications?.campaigns || []).length) },
+      { label: "Payments", value: String((data.parent?.payments || []).length) },
+    ],
+  };
+}
+
 async function handleAdmin(request: NextRequest, method: string, path: string[], data: any, operations: any, user: any) {
   ensureRole(user, ["ADMIN", "TEACHER"]);
   const users = await listAdminUsers();
@@ -236,6 +662,301 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
 
   if (method === "GET" && path[1] === "users") {
     return json(users);
+  }
+
+  if (path[1] === "payments") {
+    data.parent = data.parent || {};
+    data.parent.fees = data.parent.fees || [];
+    data.parent.payments = data.parent.payments || [];
+    data.parent.paymentPlans = data.parent.paymentPlans || [];
+    const gateways = await getSetting("payment-gateways", defaultPaymentGateways());
+
+    if (method === "GET" && path.length === 2) {
+      const payments = [...(data.parent.payments || [])].sort((a: any, b: any) =>
+        String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
+      );
+      const plans = [...(data.parent.paymentPlans || [])].sort((a: any, b: any) =>
+        String(b.startDate || "").localeCompare(String(a.startDate || "")),
+      );
+      const fees = data.parent.fees || [];
+      return json({
+        summary: {
+          outstanding: fees.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
+          collected: payments.filter((item: any) => item.status === "VERIFIED").reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0),
+          pendingVerification: payments.filter((item: any) => item.status === "PENDING_VERIFICATION").length,
+          rejected: payments.filter((item: any) => item.status === "REJECTED").length,
+          activePlans: plans.filter((item: any) => item.status === "ACTIVE").length,
+        },
+        payments: payments.map((item: any) => ({
+          ...item,
+          learnerName: learnerName(data, item.learnerId),
+          verifiedAt: item.verifiedAt || null,
+          receiptNumber: item.receiptNumber || null,
+        })),
+        plans: plans.map((item: any) => ({
+          ...item,
+          learnerName: learnerName(data, item.learnerId),
+        })),
+        statements: data.learners.map((learner: any) => {
+          const learnerFees = fees.filter((item: any) => item.learnerId === learner.id);
+          const learnerPayments = payments.filter((item: any) => item.learnerId === learner.id && item.status === "VERIFIED");
+          return {
+            learnerId: learner.id,
+            learnerName: learnerName(data, learner.id),
+            balance: learnerFees.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
+            lastPaymentAt: learnerPayments[0]?.paidAt || null,
+            items: learnerFees.length,
+          };
+        }),
+        gateways,
+      });
+    }
+
+    if (method === "PUT" && path[2] === "gateways") {
+      const body = await readBody(request);
+      await putSetting("payment-gateways", body);
+      await appendAuditLog({
+        action: "UPDATE",
+        entity: "PaymentGatewaySettings",
+        entityId: "payment-gateways",
+        actorId: user.email,
+        metadata: {
+          primaryProvider: body?.primary?.provider || "MANUAL_EFT",
+          primaryEnabled: Boolean(body?.primary?.enabled),
+        },
+      });
+      return json(body);
+    }
+
+    if (method === "POST" && path[2] === "plans") {
+      const body = await readBody(request);
+      if (!body.learnerId || !body.title || !body.instalmentAmount) {
+        return json({ error: "Learner, plan title, and instalment amount are required." }, 400);
+      }
+      const plan = {
+        id: uid("payment-plan"),
+        learnerId: body.learnerId,
+        title: String(body.title).trim(),
+        instalmentAmount: Number(body.instalmentAmount || 0),
+        frequency: body.frequency || "MONTHLY",
+        startDate: body.startDate || new Date().toISOString().slice(0, 10),
+        endDate: body.endDate || null,
+        status: body.status || "ACTIVE",
+        balance: Number(body.balance || 0),
+        notes: body.notes || "",
+        createdAt: new Date().toISOString(),
+      };
+      data.parent.paymentPlans.unshift(plan);
+      await savePortalData(data);
+      return json(plan, 201);
+    }
+
+    if (method === "PATCH" && path[2] === "plans" && path[3]) {
+      const body = await readBody(request);
+      const plan = (data.parent.paymentPlans || []).find((item: any) => item.id === path[3]);
+      if (!plan) return json({ error: "Payment plan not found." }, 404);
+      Object.assign(plan, body);
+      await savePortalData(data);
+      return json(plan);
+    }
+  }
+
+  if (path[1] === "ai-assist") {
+    data.parent = data.parent || {};
+    data.parent.fees = data.parent.fees || [];
+    data.parent.payments = data.parent.payments || [];
+    data.parent.paymentPlans = data.parent.paymentPlans || [];
+    ensureCommunicationsData(data);
+
+    if (method === "GET" && path.length === 2) {
+      return json({
+        suggestions: [
+          "Which families have outstanding balances this month?",
+          "Summarise attendance risk by class.",
+          "What communication campaigns still need to be sent?",
+          "Show hostel movement highlights for this week.",
+        ],
+        domains: ["finance", "attendance", "communications", "hostel", "discipline", "admissions"],
+      });
+    }
+
+    if (method === "POST" && path[2] === "query") {
+      const body = await readBody(request);
+      const prompt = String(body.prompt || "").trim();
+      if (!prompt) return json({ error: "Enter a question for AI Assist." }, 400);
+      const lower = prompt.toLowerCase();
+      const result = buildAdminAssistantResponse(data, lower);
+      return json({
+        prompt,
+        answer: result.answer,
+        bullets: result.bullets,
+        metrics: result.metrics,
+      });
+    }
+  }
+
+  if (path[1] === "communications") {
+    ensureCommunicationsData(data);
+    const providers = await getSetting("communication-providers", defaultCommunicationProviders());
+
+    if (method === "GET" && path.length === 2) {
+      const campaigns = [...data.communications.campaigns].sort((a: any, b: any) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+      );
+      const deliveryLogs = [...(data.communications.deliveryLogs || [])].sort((a: any, b: any) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+      );
+      const deliveredCount = deliveryLogs.filter((item: any) => item.status === "DELIVERED").length;
+      const loggableCount = deliveryLogs.filter((item: any) => item.status !== "SKIPPED").length;
+      const summary = {
+        campaigns: campaigns.length,
+        scheduled: campaigns.filter((item: any) => item.status === "SCHEDULED").length,
+        sent: campaigns.filter((item: any) => item.status === "SENT").length,
+        deliveryRate: campaigns.length
+          ? Math.round(
+              campaigns.reduce((sum: number, item: any) => sum + Number(item.metrics?.delivered || 0), 0) /
+                Math.max(campaigns.reduce((sum: number, item: any) => sum + Number(item.metrics?.recipients || 0), 0), 1) *
+                100,
+            )
+          : 0,
+        resources: data.communications.resources.length,
+        events: data.communications.calendar.length,
+        emailDelivered: deliveryLogs.filter((item: any) => item.channel === "EMAIL" && item.status === "DELIVERED").length,
+        providerReady: [providers.email, providers.sms, providers.whatsapp, providers.push].filter((item: any) => item?.enabled).length,
+        channelDeliveryRate: loggableCount ? Math.round((deliveredCount / loggableCount) * 100) : 0,
+      };
+      return json({
+        summary,
+        audiences: data.communications.audiences,
+        campaigns,
+        resources: data.communications.resources,
+        calendar: data.communications.calendar,
+        templates: data.communications.templates,
+        deliveryLogs: deliveryLogs.slice(0, 120),
+        providers,
+      });
+    }
+
+    if (method === "POST" && path[2] === "campaigns") {
+      const body = await readBody(request);
+      const audience = data.communications.audiences.find((item: any) => item.id === body.audienceId) || null;
+      const recipients = Number(audience?.memberCount || body.recipientCount || 0);
+      const status = body.status || (body.scheduledFor ? "SCHEDULED" : "DRAFT");
+      const campaign = {
+        id: uid("campaign"),
+        title: String(body.title || "Untitled campaign").trim(),
+        audienceId: body.audienceId || null,
+        status,
+        channels: Array.isArray(body.channels) && body.channels.length ? body.channels : ["APP"],
+        subject: String(body.subject || "").trim(),
+        content: String(body.content || "").trim(),
+        scheduledFor: body.scheduledFor || null,
+        sentAt: status === "SENT" ? new Date().toISOString() : null,
+        createdAt: new Date().toISOString(),
+        metrics: {
+          recipients,
+          delivered: status === "SENT" ? recipients : 0,
+          opened: status === "SENT" ? Math.max(Math.floor(recipients * 0.62), 0) : 0,
+          failed: 0,
+        },
+      };
+      data.communications.campaigns.unshift(campaign);
+      await savePortalData(data);
+      return json(campaign, 201);
+    }
+
+    if (method === "PATCH" && path[2] === "campaigns" && path[3]) {
+      const body = await readBody(request);
+      const campaign = data.communications.campaigns.find((item: any) => item.id === path[3]);
+      if (!campaign) return json({ error: "Campaign not found." }, 404);
+      Object.assign(campaign, body);
+      if (body.status === "SENT" && !campaign.sentAt) {
+        await deliverCampaign(data, campaign, user);
+      }
+      await savePortalData(data);
+      return json(campaign);
+    }
+
+    if (method === "PUT" && path[2] === "providers") {
+      const body = await readBody(request);
+      await putSetting("communication-providers", body);
+      await appendAuditLog({
+        action: "UPDATE",
+        entity: "CommunicationProviderSettings",
+        entityId: "communication-providers",
+        actorId: user.email,
+        metadata: {
+          emailProvider: body?.email?.provider || "RESEND",
+          smsProvider: body?.sms?.provider || "NONE",
+          whatsappProvider: body?.whatsapp?.provider || "NONE",
+        },
+      });
+      return json(body);
+    }
+
+    if (method === "POST" && path[2] === "providers" && path[3] === "test-email") {
+      const body = await readBody(request);
+      if (!body.email) return json({ error: "A destination email address is required." }, 400);
+      const message = renderCommunicationCampaignEmail({
+        title: "POPIN Communications Test",
+        subject: "Provider test email",
+        content: "This is a live provider test from the POPIN communications hub.",
+        schoolName: "POPIN School",
+      });
+      const result = await sendTransactionalEmail({
+        to: String(body.email).trim(),
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+      });
+      await appendAuditLog({
+        action: "SEND",
+        entity: "CommunicationProviderTest",
+        entityId: "test-email",
+        actorId: user.email,
+        metadata: {
+          to: String(body.email).trim(),
+          ok: result.ok,
+          skipped: result.skipped,
+          provider: providers.email?.provider || "RESEND",
+          error: result.error || null,
+        },
+      });
+      return json(result, result.ok || result.skipped ? 200 : 500);
+    }
+
+    if (method === "POST" && path[2] === "resources") {
+      const body = await readBody(request);
+      const resource = {
+        id: uid("resource"),
+        title: String(body.title || "Untitled resource").trim(),
+        type: body.type || "DOCUMENT",
+        category: body.category || "General",
+        audienceId: body.audienceId || null,
+        visibility: body.visibility || "PARENT_STUDENT",
+        url: String(body.url || "").trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      data.communications.resources.unshift(resource);
+      await savePortalData(data);
+      return json(resource, 201);
+    }
+
+    if (method === "POST" && path[2] === "calendar") {
+      const body = await readBody(request);
+      const event = {
+        id: uid("calendar"),
+        title: String(body.title || "Untitled event").trim(),
+        category: body.category || "Event",
+        location: body.location || "",
+        startsAt: body.startsAt || new Date().toISOString(),
+        endsAt: body.endsAt || body.startsAt || new Date().toISOString(),
+        audienceId: body.audienceId || null,
+      };
+      data.communications.calendar.unshift(event);
+      await savePortalData(data);
+      return json(event, 201);
+    }
   }
 
   if (method === "GET" && path[1] === "audit") {
@@ -277,6 +998,12 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     const payment = (data.parent?.payments || []).find((item: any) => item.id === path[3]);
     if (!payment) return json({ error: "Payment not found." }, 404);
     payment.status = path[4] === "verify" ? "VERIFIED" : "REJECTED";
+    if (path[4] === "verify") {
+      payment.verifiedAt = new Date().toISOString();
+      payment.receiptNumber = payment.receiptNumber || `RCPT-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      payment.reconciledBy = user.email;
+      applyPaymentToFee(data, payment);
+    }
     data.parent.notifications = data.parent.notifications || [];
     data.parent.notifications.unshift({
       id: uid("parent-notification"),
@@ -530,6 +1257,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "fees") {
     const items = (data.parent.fees || []).filter((item: any) => item.learnerId === learnerId);
     const payments = (data.parent.payments || []).filter((item: any) => item.learnerId === learnerId);
+    const gateways = await getSetting("payment-gateways", defaultPaymentGateways());
     return json({
       items,
       payments,
@@ -538,6 +1266,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
         paid: items.reduce((sum: number, item: any) => sum + Number(item.paidAmount || 0), 0),
         outstanding: items.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
       },
+      gateway: gateways.primary,
     });
   }
 
@@ -559,8 +1288,6 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       paidAt: new Date().toISOString(),
       status: "PENDING_VERIFICATION",
     };
-    fee.paidAmount = Math.min(Number(fee.amount || 0), Number(fee.paidAmount || 0) + paymentAmount);
-    fee.status = fee.paidAmount >= fee.amount ? "PAID" : "PARTIAL";
     data.parent.payments.unshift(payment);
     data.parent.notifications.unshift({
       id: uid("parent-notification"),
@@ -573,6 +1300,125 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     });
     await savePortalData(data);
     return json(payment, 201);
+  }
+
+  if (method === "POST" && path[1] === "children" && learnerId && path[3] === "fees" && path[4] === "payments" && path[5] === "checkout") {
+    if (!learnerLink?.payFees) return json({ error: "Fee payment is not enabled for this learner." }, 403);
+    const gateways = await getSetting("payment-gateways", defaultPaymentGateways());
+    const gateway = gateways.primary || {};
+    if (!gateway.enabled || gateway.provider !== "PAYSTACK") {
+      return json({ error: "Online checkout is not enabled for this school account." }, 400);
+    }
+
+    const body = await readBody(request);
+    const paymentAmount = Number(body.amount || 0);
+    if (!paymentAmount) return json({ error: "Enter a payment amount." }, 400);
+    const fee = (data.parent.fees || []).find((item: any) => item.id === body.feeId && item.learnerId === learnerId);
+    if (!fee) return json({ error: "Fee record not found." }, 404);
+
+    const reference = body.reference || `PAYSTACK-${Date.now()}`;
+    const payment = {
+      id: uid("payment"),
+      learnerId,
+      feeId: fee.id,
+      amount: paymentAmount,
+      method: "PAYSTACK",
+      reference,
+      proofFileName: "",
+      paidAt: new Date().toISOString(),
+      status: "PENDING_PROVIDER",
+      gatewayProvider: "PAYSTACK",
+      gatewayStatus: "initialized",
+      providerResponse: null,
+    };
+
+    const callbackBase = gateway.callbackUrl || `${getBaseUrl(request)}/parent-portal/payment-callback`;
+    const callbackUrl = `${callbackBase}${callbackBase.includes("?") ? "&" : "?"}reference=${encodeURIComponent(reference)}&learnerId=${encodeURIComponent(learnerId)}`;
+    const initializeResult = await initializePaystackTransaction({
+      email: parentEmail || data.parent?.guardianEmail || user.email,
+      amount: paymentAmount,
+      reference,
+      callbackUrl,
+      currency: gateway.currency || "ZAR",
+      secretKey: gateway.secretKey,
+      metadata: {
+        learnerId,
+        feeId: fee.id,
+        learnerName: learnerName(data, learnerId),
+        schoolName: "POPIN School",
+      },
+    });
+
+    if (!initializeResult.ok) {
+      return json({ error: initializeResult.error || "Could not start online checkout." }, 400);
+    }
+
+    payment.providerResponse = initializeResult.raw || null;
+    data.parent.payments.unshift(payment);
+    await savePortalData(data);
+    await appendAuditLog({
+      action: "parent.payment.checkout.initialize",
+      entity: "payment",
+      entityId: payment.id,
+      actorId: user.id,
+      metadata: { learnerId, amount: paymentAmount, provider: "PAYSTACK", reference },
+    });
+    return json({
+      payment,
+      authorizationUrl: initializeResult.authorizationUrl,
+      reference,
+    });
+  }
+
+  if (method === "POST" && path[1] === "children" && learnerId && path[3] === "fees" && path[4] === "payments" && path[5] === "verify") {
+    if (!learnerLink?.payFees) return json({ error: "Fee payment is not enabled for this learner." }, 403);
+    const body = await readBody(request);
+    const reference = String(body.reference || request.nextUrl.searchParams.get("reference") || "").trim();
+    if (!reference) return json({ error: "Missing payment reference." }, 400);
+    const payment = (data.parent.payments || []).find((item: any) => item.reference === reference && item.learnerId === learnerId);
+    if (!payment) return json({ error: "Payment record not found." }, 404);
+
+    const gateways = await getSetting("payment-gateways", defaultPaymentGateways());
+    const gateway = gateways.primary || {};
+    const verification = await verifyPaystackTransaction({ reference, secretKey: gateway.secretKey });
+    if (!verification.ok) {
+      return json({ error: verification.error || "Could not verify the transaction." }, 400);
+    }
+
+    const transaction = verification.data as any;
+    payment.gatewayStatus = transaction?.status || "unknown";
+    payment.providerResponse = verification.raw || null;
+    payment.gatewayVerifiedAt = new Date().toISOString();
+    payment.gatewayAuthorization = transaction?.authorization || null;
+
+    if (transaction?.status === "success") {
+      payment.status = "VERIFIED";
+      payment.method = "PAYSTACK";
+      payment.verifiedAt = payment.verifiedAt || new Date().toISOString();
+      payment.receiptNumber = payment.receiptNumber || `RCPT-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      applyPaymentToFee(data, payment);
+      data.parent.notifications.unshift({
+        id: uid("parent-notification"),
+        learnerId,
+        type: "finance",
+        title: "Online payment received",
+        message: `Your online payment for ${learnerName(data, learnerId)} was received and verified.`,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      });
+      await appendAuditLog({
+        action: "parent.payment.checkout.verify",
+        entity: "payment",
+        entityId: payment.id,
+        actorId: user.id,
+        metadata: { learnerId, amount: payment.amount, provider: "PAYSTACK", reference },
+      });
+    } else {
+      payment.status = "REJECTED";
+    }
+
+    await savePortalData(data);
+    return json(payment);
   }
 
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "applications") {
@@ -1219,6 +2065,92 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     }
     await savePortalData(data);
     return json({ id: uid("attendance-submit"), status: body.submit ? "SUBMITTED" : "DRAFT", ...body }, 201);
+  }
+
+  return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
+}
+
+async function handleStudent(request: NextRequest, method: string, path: string[], data: any, user: any) {
+  ensureRole(user, ["ADMIN", "STUDENT"]);
+  const learner = resolveStudentLearner(data, user, request);
+  if (!learner) return json({ error: "Student profile not found for this account." }, 404);
+
+  const learnerClasses = data.classes.filter((item: any) =>
+    (item.learners || []).some((classLearner: any) => classLearner.id === learner.id),
+  );
+  const workItems = learnerClasses.flatMap((item: any) => item.workItems || []);
+  const attendance = (data.parent?.attendance || [])
+    .filter((item: any) => item.learnerId === learner.id)
+    .sort((a: any, b: any) => String(b.date).localeCompare(String(a.date)));
+  const reports = (data.parent?.reports || [])
+    .filter((item: any) => item.learnerId === learner.id)
+    .sort((a: any, b: any) => String(b.publishedAt || "").localeCompare(String(a.publishedAt || "")));
+  const discipline = (data.disciplinary?.records || [])
+    .filter((item: any) => item.learnerId === learner.id && item.parentVisible !== false)
+    .sort((a: any, b: any) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || "")));
+  const announcements = data.teacher?.dashboard?.announcements || [];
+  const notifications = [
+    ...((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id)),
+    ...((data.notifications || []).filter((item: any) => item.type === "announcement" || item.type === "approval")),
+  ]
+    .sort((a: any, b: any) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
+  ensureCommunicationsData(data);
+
+  if (method === "GET" && path.join("/") === "student/overview") {
+    return json({
+      learner,
+      classes: learnerClasses,
+      timetable: learnerClasses.flatMap((item: any) => item.timetable || []),
+      homework: workItems.filter((item: any) => item.type === "HOMEWORK"),
+      assessments: workItems.filter((item: any) => item.type === "ASSESSMENT"),
+      lessonPlans: workItems.filter((item: any) => item.type === "LESSON_PLAN"),
+      attendance,
+      reports,
+      discipline,
+      announcements,
+      resources: data.communications.resources.filter((item: any) => ["PARENT_STUDENT", "STUDENT"].includes(item.visibility)),
+      calendar: data.communications.calendar,
+    });
+  }
+
+  if (method === "GET" && path.join("/") === "student/timetable") {
+    return json(learnerClasses.flatMap((item: any) => item.timetable || []));
+  }
+
+  if (method === "GET" && path.join("/") === "student/attendance") {
+    return json(attendance);
+  }
+
+  if (method === "GET" && path.join("/") === "student/reports") {
+    return json(reports);
+  }
+
+  if (method === "GET" && path.join("/") === "student/announcements") {
+    return json(announcements);
+  }
+
+  if (method === "GET" && path.join("/") === "student/resources") {
+    return json(data.communications.resources.filter((item: any) => ["PARENT_STUDENT", "STUDENT"].includes(item.visibility)));
+  }
+
+  if (method === "GET" && path.join("/") === "student/calendar") {
+    return json(data.communications.calendar);
+  }
+
+  if (method === "GET" && path.join("/") === "student/notifications") {
+    return json(notifications);
+  }
+
+  if (method === "POST" && path.join("/") === "student/notifications/read-all") {
+    for (const item of data.parent?.notifications || []) {
+      if (item.learnerId === learner.id) item.readAt = item.readAt || new Date().toISOString();
+    }
+    await savePortalData(data);
+    return json(
+      ((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id)).sort((a: any, b: any) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+      ),
+    );
   }
 
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);

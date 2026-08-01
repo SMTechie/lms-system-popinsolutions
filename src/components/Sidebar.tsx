@@ -10,7 +10,9 @@ import {
   Kanban,
   LayoutDashboard,
   LogOut,
+  MessageCircleCode,
   Package,
+  ReceiptText,
   Presentation,
   Settings,
   ShieldAlert,
@@ -41,11 +43,12 @@ type NavGroup = {
 const navGroups: NavGroup[] = [
   {
     label: 'Overview',
-    roles: ['ADMIN', 'TEACHER'],
+    roles: ['ADMIN', 'TEACHER', 'STUDENT'],
     items: [
-      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/analytics', label: 'Analytics', icon: BarChart3 },
-      { path: '/boards', label: 'Boards', icon: Kanban },
+      { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/analytics', label: 'Analytics', icon: BarChart3, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/boards', label: 'Boards', icon: Kanban, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/student-portal', label: 'Student Portal', icon: GraduationCap, roles: ['ADMIN', 'STUDENT'] },
     ],
   },
   {
@@ -58,6 +61,9 @@ const navGroups: NavGroup[] = [
       { path: '/store', label: 'Uniform Store', icon: Shirt, roles: ['ADMIN', 'TEACHER', 'PARENT'] },
       { path: '/tickets', label: 'Tickets', icon: Ticket, roles: ['ADMIN', 'TEACHER'] },
       { path: '/discipline', label: 'Discipline', icon: ShieldAlert, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/communications', label: 'Communications', icon: Presentation, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/payments', label: 'Payments', icon: ReceiptText, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/ai-assist', label: 'AI Assist', icon: MessageCircleCode, roles: ['ADMIN', 'TEACHER'] },
     ],
   },
   {
@@ -106,7 +112,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const schoolName = branding?.schoolName || 'POPIN School';
   const profileName = user?.name || 'Workspace User';
   const roleLabel =
-    activeRole === 'PARENT' ? 'Parent access' : activeRole === 'TEACHER' ? 'Teacher workspace' : 'Administration';
+    activeRole === 'PARENT'
+      ? 'Parent access'
+      : activeRole === 'TEACHER'
+        ? 'Teacher workspace'
+        : activeRole === 'STUDENT'
+          ? 'Student access'
+          : 'Administration';
   const initials = profileName
     .split(/\s+/)
     .map((part) => part[0] || '')
