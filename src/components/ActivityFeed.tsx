@@ -20,11 +20,12 @@ interface ActivityItem {
 }
 
 export default function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  const recentItems = items.slice(0, 5);
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
       <ul className="space-y-4">
-        {items.map((item, i) => (
+        {recentItems.map((item, i) => (
           <motion.li
             key={item.id}
             initial={{ opacity: 0, x: -8 }}

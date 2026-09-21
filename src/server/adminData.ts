@@ -201,7 +201,7 @@ export function buildAdminDashboard(
     revenueChart: buildRevenueSeries(operationsData),
     ticketChart: buildTicketBreakdown(operationsData),
     admissions,
-    activity: portalData.activity || [],
+    activity: (portalData.activity || []).slice(0, 5),
     approvalQueue,
     financeQueue: paymentQueue.map((payment: any) => ({
       ...payment,
