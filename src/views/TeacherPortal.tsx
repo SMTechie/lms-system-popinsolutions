@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
-  CalendarCheck2,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
@@ -27,6 +26,12 @@ import { notifyAction } from '../lib/notify';
 type Tab =
   | 'workbench'
   | 'classes'
+  | 'timetable'
+  | 'gradebook'
+  | 'resources'
+  | 'reports'
+  | 'calendar'
+  | 'notifications'
   | 'homework'
   | 'plans'
   | 'attendance'
@@ -48,21 +53,32 @@ export default function TeacherPortal() {
   const [requisitions, setRequisitions] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [assessmentOverview, setAssessmentOverview] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showWork, setShowWork] = useState(false);
-  const [work, setWork] = useState({ type: 'HOMEWORK', title: '', classId: '', instructions: '', dueAt: '', visibleToParents: true });
+  const [work, setWork] = useState({ type: 'HOMEWORK', title: '', classId: '', instructions: '', dueAt: '', scheduledAt: '', visibleToParents: true });
   const [attendanceClass, setAttendanceClass] = useState<any>(null);
   const [attendance, setAttendance] = useState<Record<string, { status: string; note: string }>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [profileDraft, setProfileDraft] = useState<any>(null);
+  const [timetableDraft, setTimetableDraft] = useState({ classId: '', day: 'Monday', subject: '', startsAt: '08:00', endsAt: '08:45', room: '' });
+  const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
+  const [resources, setResources] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [teacherNotifications, setTeacherNotifications] = useState<any[]>([]);
+  const [gradebook, setGradebook] = useState<any>({ assessments: [], entries: [] });
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
+  const [gradeDraft, setGradeDraft] = useState<Record<string, { mark: string; comment: string }>>({});
+  const [resourceDraft, setResourceDraft] = useState({ title: '', url: '', category: 'Lesson material', classId: '' });
+  const [reportDraft, setReportDraft] = useState({ classId: '', learnerId: '', term: 'Current term', comment: '' });
+  const [calendarDraft, setCalendarDraft] = useState({ title: '', type: 'Lesson', startsAt: '', endsAt: '', classId: '', notes: '' });
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const [summary, classData, messageData, requisitionData, profileData, appointmentData, assessmentData] = await Promise.all([
+      const [summary, classData, messageData, requisitionData, profileData, appointmentData, assessmentData, resourceData, reportData, calendarData, notificationData, gradebookData] = await Promise.all([
         apiRequest('/teacher/dashboard'),
         apiRequest<any[]>('/teacher/classes'),
         apiRequest<any[]>('/teacher/messages'),
@@ -70,6 +86,11 @@ export default function TeacherPortal() {
         apiRequest('/teacher/profile'),
         apiRequest<any[]>('/teacher/appointments'),
         apiRequest('/teacher/assessments/overview'),
+        apiRequest<any[]>('/teacher/resources'),
+        apiRequest<any[]>('/teacher/reports'),
+        apiRequest<any[]>('/teacher/calendar'),
+        apiRequest<any[]>('/teacher/notifications'),
+        apiRequest('/teacher/gradebook'),
       ]);
       setDashboard(summary && typeof summary === 'object' ? summary : null);
       setClasses(Array.isArray(classData) ? classData : []);
@@ -77,8 +98,12 @@ export default function TeacherPortal() {
       setRequisitions(Array.isArray(requisitionData) ? requisitionData : []);
       setAppointments(Array.isArray(appointmentData) ? appointmentData : []);
       setAssessmentOverview(assessmentData && typeof assessmentData === 'object' ? assessmentData : null);
-      setProfile(profileData && typeof profileData === 'object' ? profileData : null);
       setProfileDraft(profileData && typeof profileData === 'object' ? profileData : null);
+      setResources(Array.isArray(resourceData) ? resourceData : []);
+      setReports(Array.isArray(reportData) ? reportData : []);
+      setCalendarEvents(Array.isArray(calendarData) ? calendarData : []);
+      setTeacherNotifications(Array.isArray(notificationData) ? notificationData : []);
+      setGradebook(gradebookData && typeof gradebookData === 'object' ? gradebookData : { assessments: [], entries: [] });
     } catch (err: any) {
       setError(err.message || 'Unable to load your teacher workspace.');
     } finally {
@@ -118,17 +143,67 @@ export default function TeacherPortal() {
           ...work,
           classId: work.classId || undefined,
           dueAt: work.dueAt || undefined,
+          scheduledAt: work.scheduledAt || undefined,
           status: work.visibleToParents ? 'PUBLISHED' : 'DRAFT',
         }),
       });
       setShowWork(false);
-      setWork({ type: 'HOMEWORK', title: '', classId: '', instructions: '', dueAt: '', visibleToParents: true });
+      setWork({ type: 'HOMEWORK', title: '', classId: '', instructions: '', dueAt: '', scheduledAt: '', visibleToParents: true });
       notifyAction('Teaching item created.', 'success');
       await load();
     } catch (err: any) {
       setError(err.message || 'Could not create teaching item.');
     }
   };
+
+  const addTimetablePeriod = async () => {
+    if (!timetableDraft.classId || !timetableDraft.subject.trim() || !timetableDraft.startsAt || !timetableDraft.endsAt) {
+      notifyAction('Select a class and complete the timetable fields.', 'error');
+      return;
+    }
+    try {
+      await apiRequest(editingTimetableId ? `/teacher/timetable/${editingTimetableId}` : '/teacher/timetable', { method: editingTimetableId ? 'PATCH' : 'POST', body: JSON.stringify(timetableDraft) });
+      notifyAction(editingTimetableId ? 'Timetable period updated.' : 'Timetable period added.', 'success');
+      setTimetableDraft({ classId: '', day: 'Monday', subject: '', startsAt: '08:00', endsAt: '08:45', room: '' });
+      setEditingTimetableId(null);
+      await load();
+    } catch (err: any) {
+      notifyAction(err.message || 'Could not add timetable period.', 'error');
+    }
+  };
+
+  const deleteTimetablePeriod = async (id: string) => {
+    try { await apiRequest(`/teacher/timetable/${id}`, { method: 'DELETE' }); notifyAction('Timetable period removed.', 'success'); await load(); }
+    catch (err: any) { notifyAction(err.message || 'Could not remove timetable period.', 'error'); }
+  };
+
+  const loadAssessmentGrades = async (assessmentId: string) => {
+    setSelectedAssessmentId(assessmentId);
+    if (!assessmentId) return;
+    const result: any = await apiRequest(`/teacher/gradebook?assessmentId=${encodeURIComponent(assessmentId)}`);
+    setGradebook((current: any) => ({ ...current, entries: result.entries || [] }));
+    setGradeDraft(Object.fromEntries((result.entries || []).map((entry: any) => [entry.learnerId, { mark: String(entry.mark ?? ''), comment: entry.comment || '' }])));
+  };
+
+  const saveGrades = async () => {
+    if (!selectedAssessmentId) return;
+    await apiRequest('/teacher/gradebook', { method: 'POST', body: JSON.stringify({ assessmentId: selectedAssessmentId, entries: Object.entries(gradeDraft).map(([learnerId, value]) => ({ learnerId, ...value })) }) });
+    notifyAction('Gradebook saved.', 'success'); await load();
+  };
+
+  const createResource = async () => {
+    try { await apiRequest('/teacher/resources', { method: 'POST', body: JSON.stringify(resourceDraft) }); setResourceDraft({ title: '', url: '', category: 'Lesson material', classId: '' }); notifyAction('Resource added.', 'success'); await load(); }
+    catch (err: any) { notifyAction(err.message || 'Could not add resource.', 'error'); }
+  };
+  const createReport = async () => {
+    try { await apiRequest('/teacher/reports', { method: 'POST', body: JSON.stringify(reportDraft) }); setReportDraft({ ...reportDraft, comment: '' }); notifyAction('Progress report saved.', 'success'); await load(); }
+    catch (err: any) { notifyAction(err.message || 'Could not save progress report.', 'error'); }
+  };
+  const createCalendarEvent = async () => {
+    try { await apiRequest('/teacher/calendar', { method: 'POST', body: JSON.stringify(calendarDraft) }); setCalendarDraft({ title: '', type: 'Lesson', startsAt: '', endsAt: '', classId: '', notes: '' }); notifyAction('Calendar event added.', 'success'); await load(); }
+    catch (err: any) { notifyAction(err.message || 'Could not add calendar event.', 'error'); }
+  };
+  const markNotificationsRead = async () => { await apiRequest('/teacher/notifications/read-all', { method: 'POST' }); await load(); };
 
   const openAttendance = (schoolClass: any) => {
     setAttendanceClass(schoolClass);
@@ -189,18 +264,6 @@ export default function TeacherPortal() {
     }
   };
 
-  const updateAppointment = async (appointmentId: string, status: string) => {
-    try {
-      await apiRequest(`/teacher/appointments/${appointmentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      });
-      notifyAction('Appointment request updated.', 'success');
-      await load();
-    } catch (error: any) {
-      notifyAction(error.message || 'Could not update the appointment.', 'error');
-    }
-  };
 
   const saveProfile = async () => {
     try {
@@ -208,7 +271,6 @@ export default function TeacherPortal() {
         method: 'PATCH',
         body: JSON.stringify(profileDraft),
       });
-      setProfile(updated);
       setProfileDraft(updated);
       notifyAction('Teacher profile updated.', 'success');
       await load();
@@ -220,6 +282,12 @@ export default function TeacherPortal() {
   const tabs: Array<{ id: Tab; label: string; icon: any }> = [
     { id: 'workbench', label: 'Today', icon: CalendarDays },
     { id: 'classes', label: 'My Classes', icon: Users },
+    { id: 'timetable', label: 'Timetable', icon: CalendarDays },
+    { id: 'gradebook', label: 'Gradebook', icon: ClipboardCheck },
+    { id: 'resources', label: 'Resources', icon: BookOpen },
+    { id: 'reports', label: 'Progress Reports', icon: FileText },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+    { id: 'notifications', label: 'Notifications', icon: Megaphone },
     { id: 'homework', label: 'Homework', icon: BookOpen },
     { id: 'plans', label: 'Lesson Plans', icon: FileText },
     { id: 'attendance', label: 'Attendance', icon: ClipboardCheck },
@@ -411,6 +479,37 @@ export default function TeacherPortal() {
             ))}
           </div>
         )}
+
+        {!loading && tab === 'timetable' && (
+          <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <Panel title="Add timetable period">
+              <div className="space-y-3">
+                <Field label="Class"><select className={fieldClass} value={timetableDraft.classId} onChange={(event) => setTimetableDraft({ ...timetableDraft, classId: event.target.value })}><option value="">Select class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+                <Field label="Day"><select className={fieldClass} value={timetableDraft.day} onChange={(event) => setTimetableDraft({ ...timetableDraft, day: event.target.value })}>{['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => <option key={day}>{day}</option>)}</select></Field>
+                <Field label="Subject"><input className={fieldClass} value={timetableDraft.subject} onChange={(event) => setTimetableDraft({ ...timetableDraft, subject: event.target.value })} placeholder="Mathematics" /></Field>
+                <div className="grid grid-cols-2 gap-3"><Field label="Starts"><input type="time" className={fieldClass} value={timetableDraft.startsAt} onChange={(event) => setTimetableDraft({ ...timetableDraft, startsAt: event.target.value })} /></Field><Field label="Ends"><input type="time" className={fieldClass} value={timetableDraft.endsAt} onChange={(event) => setTimetableDraft({ ...timetableDraft, endsAt: event.target.value })} /></Field></div>
+                <Field label="Room"><input className={fieldClass} value={timetableDraft.room} onChange={(event) => setTimetableDraft({ ...timetableDraft, room: event.target.value })} placeholder="Room B12" /></Field>
+                <button onClick={() => void addTimetablePeriod()} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white"><Plus className="mr-2 inline h-4 w-4" />{editingTimetableId ? 'Update period' : 'Add period'}</button>
+                {editingTimetableId && <button onClick={() => { setEditingTimetableId(null); setTimetableDraft({ classId: '', day: 'Monday', subject: '', startsAt: '08:00', endsAt: '08:45', room: '' }); }} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600">Cancel edit</button>}
+              </div>
+            </Panel>
+            <Panel title="Class timetable">
+              <div className="space-y-4">{classes.map((schoolClass) => <div key={schoolClass.id}><h4 className="font-bold text-slate-900">{schoolClass.name}</h4><div className="mt-2 grid gap-2">{(schoolClass.timetable || []).map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm"><span className="font-semibold">{entry.day || 'School day'} · {entry.subject}</span><span className="text-xs text-slate-500">{entry.startsAt}–{entry.endsAt} · {entry.room || schoolClass.room || 'Room not set'}</span></div>)}</div></div>)}</div>
+            </Panel>
+          </div>
+        )}
+
+        {!loading && tab === 'timetable' && <Panel title="Edit or remove periods"><div className="space-y-2">{classes.flatMap((schoolClass) => (schoolClass.timetable || []).map((entry: any) => <div key={entry.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3"><span className="text-sm font-semibold">{schoolClass.name} · {entry.day} {entry.startsAt}–{entry.endsAt} · {entry.subject}</span><div className="flex gap-3"><button onClick={() => { setEditingTimetableId(entry.id); setTimetableDraft({ classId: schoolClass.id, day: entry.day || 'Monday', subject: entry.subject || '', startsAt: entry.startsAt || '08:00', endsAt: entry.endsAt || '08:45', room: entry.room || '' }); }} className="text-xs font-semibold text-blue-600">Edit</button><button onClick={() => void deleteTimetablePeriod(entry.id)} className="text-xs font-semibold text-red-600">Delete</button></div></div>))}</div></Panel>}
+
+        {!loading && tab === 'gradebook' && <Panel title="Assessment gradebook"><div className="space-y-4"><select className={fieldClass} value={selectedAssessmentId} onChange={(event) => void loadAssessmentGrades(event.target.value)}><option value="">Select an assessment</option>{(gradebook.assessments || []).map((item: any) => <option key={item.id} value={item.id}>{item.title} — {item.className}</option>)}</select>{selectedAssessmentId ? <><div className="space-y-2">{(gradebook.assessments.find((item: any) => item.id === selectedAssessmentId)?.learners || []).map((learner: any) => <div key={learner.id} className="grid gap-2 rounded-xl bg-slate-50 p-3 md:grid-cols-[1fr_120px_2fr]"><span className="self-center text-sm font-semibold">{learner.firstName} {learner.lastName}</span><input className={fieldClass} type="number" min="0" placeholder="Mark" value={gradeDraft[learner.id]?.mark || ''} onChange={(event) => setGradeDraft({ ...gradeDraft, [learner.id]: { mark: event.target.value, comment: gradeDraft[learner.id]?.comment || '' } })} /><input className={fieldClass} placeholder="Feedback" value={gradeDraft[learner.id]?.comment || ''} onChange={(event) => setGradeDraft({ ...gradeDraft, [learner.id]: { mark: gradeDraft[learner.id]?.mark || '', comment: event.target.value } })} /></div>)}</div><button onClick={() => void saveGrades()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Save gradebook</button></> : <Empty text="Select an assessment to enter marks and feedback." />}</div></Panel>}
+
+        {!loading && tab === 'resources' && <div className="grid gap-5 lg:grid-cols-[360px_1fr]"><Panel title="Add learning resource"><div className="space-y-3"><Field label="Title"><input className={fieldClass} value={resourceDraft.title} onChange={(event) => setResourceDraft({ ...resourceDraft, title: event.target.value })} /></Field><Field label="File or URL"><input className={fieldClass} value={resourceDraft.url} onChange={(event) => setResourceDraft({ ...resourceDraft, url: event.target.value })} placeholder="https://..." /></Field><Field label="Category"><input className={fieldClass} value={resourceDraft.category} onChange={(event) => setResourceDraft({ ...resourceDraft, category: event.target.value })} /></Field><Field label="Class"><select className={fieldClass} value={resourceDraft.classId} onChange={(event) => setResourceDraft({ ...resourceDraft, classId: event.target.value })}><option value="">All my classes</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><button onClick={() => void createResource()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Add resource</button></div></Panel><Panel title="Teaching resources"><div className="space-y-3">{resources.length ? resources.map((item) => <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-slate-200 p-3 hover:border-blue-300"><p className="font-semibold text-slate-900">{item.title}</p><p className="text-xs text-slate-500">{item.category} · {item.url}</p></a>) : <Empty text="No resources added yet." />}</div></Panel></div>}
+
+        {!loading && tab === 'reports' && <div className="grid gap-5 lg:grid-cols-[360px_1fr]"><Panel title="Write progress report"><div className="space-y-3"><Field label="Class"><select className={fieldClass} value={reportDraft.classId} onChange={(event) => setReportDraft({ ...reportDraft, classId: event.target.value, learnerId: '' })}><option value="">Select class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Learner"><select className={fieldClass} value={reportDraft.learnerId} onChange={(event) => setReportDraft({ ...reportDraft, learnerId: event.target.value })}><option value="">Select learner</option>{(classes.find((item) => item.id === reportDraft.classId)?.learners || []).map((learner: any) => <option key={learner.id} value={learner.id}>{learner.firstName} {learner.lastName}</option>)}</select></Field><Field label="Term"><input className={fieldClass} value={reportDraft.term} onChange={(event) => setReportDraft({ ...reportDraft, term: event.target.value })} /></Field><Field label="Comment"><textarea className={fieldClass} rows={5} value={reportDraft.comment} onChange={(event) => setReportDraft({ ...reportDraft, comment: event.target.value })} /></Field><button onClick={() => void createReport()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Save report</button></div></Panel><Panel title="Saved progress reports"><div className="space-y-3">{reports.length ? reports.map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><p className="font-semibold text-slate-900">{item.learnerName} · {item.term}</p><p className="mt-1 text-sm text-slate-600">{item.comment}</p></div>) : <Empty text="No progress reports saved yet." />}</div></Panel></div>}
+
+        {!loading && tab === 'calendar' && <div className="grid gap-5 lg:grid-cols-[360px_1fr]"><Panel title="Add calendar event"><div className="space-y-3"><Field label="Title"><input className={fieldClass} value={calendarDraft.title} onChange={(event) => setCalendarDraft({ ...calendarDraft, title: event.target.value })} /></Field><Field label="Type"><select className={fieldClass} value={calendarDraft.type} onChange={(event) => setCalendarDraft({ ...calendarDraft, type: event.target.value })}><option>Lesson</option><option>Meeting</option><option>Substitution</option><option>Reminder</option></select></Field><Field label="Starts"><input type="datetime-local" className={fieldClass} value={calendarDraft.startsAt} onChange={(event) => setCalendarDraft({ ...calendarDraft, startsAt: event.target.value })} /></Field><Field label="Ends"><input type="datetime-local" className={fieldClass} value={calendarDraft.endsAt} onChange={(event) => setCalendarDraft({ ...calendarDraft, endsAt: event.target.value })} /></Field><Field label="Class"><select className={fieldClass} value={calendarDraft.classId} onChange={(event) => setCalendarDraft({ ...calendarDraft, classId: event.target.value })}><option value="">No class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Notes"><textarea className={fieldClass} rows={3} value={calendarDraft.notes} onChange={(event) => setCalendarDraft({ ...calendarDraft, notes: event.target.value })} /></Field><button onClick={() => void createCalendarEvent()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Add event</button></div></Panel><Panel title="Teacher calendar"><div className="space-y-3">{calendarEvents.length ? calendarEvents.map((item) => <div key={item.id} className="rounded-xl border border-slate-200 p-3"><p className="font-semibold text-slate-900">{item.title} <span className="text-xs text-blue-600">{item.type}</span></p><p className="text-xs text-slate-500">{new Date(item.startsAt).toLocaleString()} {item.endsAt ? `— ${new Date(item.endsAt).toLocaleString()}` : ''}</p><p className="mt-1 text-sm text-slate-600">{item.notes}</p></div>) : <Empty text="No calendar events yet." />}</div></Panel></div>}
+
+        {!loading && tab === 'notifications' && <Panel title="Teacher notifications"><div className="mb-3 flex justify-end"><button onClick={() => void markNotificationsRead()} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Mark all as read</button></div><div className="space-y-3">{teacherNotifications.length ? teacherNotifications.map((item) => <div key={item.id} className={`rounded-xl p-3 ${item.readAt ? 'bg-slate-50' : 'bg-blue-50'}`}><p className="font-semibold text-slate-900">{item.title}</p><p className="text-sm text-slate-600">{item.message}</p></div>) : <Empty text="No notifications yet." />}</div></Panel>}
 
         {!loading && ['homework', 'plans'].includes(tab) && (
           <WorkList
@@ -728,6 +827,9 @@ export default function TeacherPortal() {
           </Field>
           <Field label="Due date">
             <input type="datetime-local" className={fieldClass} value={work.dueAt} onChange={(event) => setWork({ ...work, dueAt: event.target.value })} />
+          </Field>
+          <Field label="Publish / schedule date (optional)">
+            <input type="datetime-local" className={fieldClass} value={work.scheduledAt} onChange={(event) => setWork({ ...work, scheduledAt: event.target.value })} />
           </Field>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={work.visibleToParents} onChange={(event) => setWork({ ...work, visibleToParents: event.target.checked })} />

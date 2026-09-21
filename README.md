@@ -57,6 +57,23 @@ Use [.env.example](C:/Users/LENOVO/Documents/GitHub/popin-LMS/.env.example) as t
 
 ## Database
 
+### Local PostgreSQL with Docker
+
+Start the local database:
+
+```bash
+docker compose up -d db
+```
+
+Use `.env.docker` for local Docker database commands, then apply the schema and seed demo users:
+
+```bash
+make db-migrate
+make db-seed
+```
+
+The Docker database is persisted in the `popin_lms_postgres_data` volume. The existing `.env` remains configured for Neon.
+
 Generate Prisma client:
 
 ```bash

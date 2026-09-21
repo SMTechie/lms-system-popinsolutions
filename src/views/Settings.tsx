@@ -9,8 +9,10 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  UserPlus,
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import Modal from '../components/Modal';
 import { apiRequest } from '../lib/api';
 import { useBranding } from '../settings/BrandingContext';
 
@@ -45,6 +47,7 @@ const pages: Page[] = [
     description: 'Legal identity, contact details, academic calendar, and operational school information.',
     fields: [
       f('schoolName', 'School name', 'Official name shown across portals and documents', true),
+      f('logoUrl', 'School logo / favicon', 'Upload the logo used across the LMS, browser favicon, and installed app icon', false, 'image'),
       f('emisNumber', 'EMIS number', 'Government education management identifier'),
       f('timezone', 'Timezone', 'Used by timetables, automation, and audit timestamps', true, 'select', ['Africa/Johannesburg', 'UTC', 'Africa/Gaborone']),
       f('academicYear', 'Current academic year', 'Active year for classes and reporting', true, 'number'),
@@ -345,6 +348,24 @@ const pages: Page[] = [
 
 const inputClass = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
+const permissionCatalog = [
+  'operations:read', 'operations:write',
+  'inventory:read', 'inventory:write',
+  'requisitions:read', 'requisitions:write',
+  'tickets:read', 'tickets:write',
+  'store:read', 'store:write', 'uniform_store:store.manage',
+  'students:read',
+  'discipline:read', 'discipline:write',
+  'parent_portal:read', 'parent_portal:acknowledge',
+  'student_portal:read', 'announcements:read', 'attendance:read', 'assessments:read',
+];
+const defaultRolePermissions: Record<string, string[]> = {
+  ADMIN: permissionCatalog,
+  TEACHER: ['operations:read', 'tickets:read', 'tickets:write', 'students:read', 'discipline:read', 'discipline:write'],
+  PARENT: ['parent_portal:read', 'parent_portal:acknowledge', 'store:read', 'tickets:read'],
+  STUDENT: ['student_portal:read', 'attendance:read', 'assessments:read'],
+};
+
 async function readImageAsDataUrl(file: File) {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -363,6 +384,16 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [settingsNavOpen, setSettingsNavOpen] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState('ALL');
+  const [userPage, setUserPage] = useState(1);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'TEACHER', password: '' });
+  const [showAddRole, setShowAddRole] = useState(false);
+  const [newRoleName, setNewRoleName] = useState('');
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
   const { branding, refresh: refreshBranding } = useBranding();
@@ -370,13 +401,14 @@ export default function Settings() {
   const active = pages.find((page) => page.id === activeId)!;
 
   useEffect(() => {
-    Promise.all([apiRequest<any[]>('/settings'), apiRequest<any>('/audit?pageSize=100')])
-      .then(([settings, logs]) => {
+    Promise.all([apiRequest<any[]>('/settings'), apiRequest<any>('/audit?pageSize=100'), apiRequest<any[]>('/admin/users')])
+      .then(([settings, logs, userList]) => {
         const list = Array.isArray(settings) ? settings : [];
         const mapped = Object.fromEntries(list.map((item) => [item.key, item.value]));
         setValues(mapped);
         setSavedValues(mapped);
         setAudit(Array.isArray(logs?.items) ? logs.items : []);
+        setUsers(Array.isArray(userList) ? userList : []);
         setLoadError('');
       })
       .catch((err: any) => {
@@ -401,6 +433,7 @@ export default function Settings() {
     [search]
   );
   const pageAudit = audit.filter((item) => item.entity === 'Setting' && item.entityId === active.id).slice(0, 5);
+  useEffect(() => { setUserPage(1); }, [userSearch, userRoleFilter, userStatusFilter]);
 
   const update = (key: string, value: any) => {
     setValues((all) => ({ ...all, [active.id]: { ...current, [key]: value } }));
@@ -439,6 +472,39 @@ export default function Settings() {
     }
   };
 
+  const addUser = async () => {
+    try {
+      const created = await apiRequest<any>('/admin/users', { method: 'POST', body: JSON.stringify(newUser) });
+      setUsers((current) => [created, ...current]);
+      setNewUser({ name: '', email: '', role: 'TEACHER', password: '' });
+      setShowAddUser(false);
+      setMessage('User created successfully.');
+    } catch (err: any) {
+      setMessage(err.message || 'User could not be created.');
+    }
+  };
+
+  const reviewRegistration = async (userId: string, status: 'APPROVED' | 'REJECTED') => {
+    const reason = status === 'REJECTED' ? window.prompt('Reason for rejecting this registration:', 'Registration details could not be verified.') : undefined;
+    if (status === 'REJECTED' && reason === null) return;
+    try {
+      const updated = await apiRequest<any>(`/admin/users/${userId}/registration`, { method: 'PATCH', body: JSON.stringify({ status, reason }) });
+      setUsers((current) => current.map((item) => item.id === userId ? { ...item, ...updated, status: status === 'APPROVED' ? 'active' : 'rejected' } : item));
+      setMessage(status === 'APPROVED' ? 'Registration approved.' : 'Registration rejected.');
+    } catch (err: any) {
+      setMessage(err.message || 'Registration review failed.');
+    }
+  };
+
+  const rolePermissions: Record<string, string[]> = current.rolePermissions || defaultRolePermissions;
+  const addRole = () => {
+    const role = newRoleName.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (!role || rolePermissions[role]) return setMessage('Enter a unique role name.');
+    update('rolePermissions', { ...rolePermissions, [role]: [] });
+    setNewRoleName('');
+    setShowAddRole(false);
+  };
+
   return (
     <DashboardLayout title="Administration Centre">
       <div className="space-y-5">
@@ -463,39 +529,36 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="self-start rounded-2xl border border-gray-200 bg-white p-3 lg:sticky lg:top-4">
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Find any setting..."
-                className={`${inputClass} pl-9`}
-              />
-            </div>
-            <nav className="max-h-[68vh] space-y-1 overflow-y-auto">
-              {filteredPages.map((page) => (
-                <button
-                  key={page.id}
-                  onClick={() => {
-                    setActiveId(page.id);
-                    setMessage('');
-                  }}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold ${activeId === page.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  <span>{page.label}</span>
-                  {savedValues[page.id] ? (
-                    <CheckCircle2 className={`h-3.5 w-3.5 ${activeId === page.id ? 'text-white' : 'text-emerald-500'}`} />
-                  ) : (
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-                  )}
-                </button>
-              ))}
-            </nav>
-          </aside>
+        <main className="space-y-5">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSettingsNavOpen((open) => !open)}
+              aria-expanded={settingsNavOpen}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <Settings2 className="h-4 w-4 text-blue-600" />
+              Settings sections
+              <ChevronDown className={`h-4 w-4 transition-transform ${settingsNavOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {settingsNavOpen && (
+              <div className="absolute left-0 top-full z-30 mt-2 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find any setting..." className={`${inputClass} pl-9`} autoFocus />
+                </div>
+                <nav className="max-h-[60vh] space-y-1 overflow-y-auto">
+                  {filteredPages.map((page) => (
+                    <button key={page.id} onClick={() => { setActiveId(page.id); setMessage(''); setSettingsNavOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold ${activeId === page.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                      <span>{page.label}</span>
+                      {savedValues[page.id] ? <CheckCircle2 className={`h-3.5 w-3.5 ${activeId === page.id ? 'text-white' : 'text-emerald-500'}`} /> : <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )}
+          </div>
 
-          <main className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs text-gray-400">Administration Centre / {active.label}</p>
@@ -550,6 +613,55 @@ export default function Settings() {
                 </button>
               </div>
             </section>
+
+            {activeId === 'users' && <UsersTable users={users} userSearch={userSearch} setUserSearch={setUserSearch} userRoleFilter={userRoleFilter} setUserRoleFilter={setUserRoleFilter} userStatusFilter={userStatusFilter} setUserStatusFilter={setUserStatusFilter} userPage={userPage} setUserPage={setUserPage} onAddUser={() => setShowAddUser(true)} onReviewRegistration={reviewRegistration} />}
+
+            {Boolean(activeId === '__legacy-users__') && activeId === 'users' && (
+              <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
+                  <div>
+                    <h4 className="text-sm font-bold">Workspace users</h4>
+                    <p className="mt-1 text-xs text-gray-500">Create accounts for administrators, teachers, parents, and students.</p>
+                  </div>
+                  <button onClick={() => setShowAddUser(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
+                    <UserPlus className="mr-2 inline h-4 w-4" />Add user
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-3 border-b border-gray-100 bg-gray-50 p-4">
+                  <div className="relative min-w-[240px] flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" /><input className={`${inputClass} pl-9`} placeholder="Search name or email" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} /></div>
+                  <select className={`${inputClass} w-auto min-w-[150px]`} value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)}><option value="ALL">All roles</option><option value="ADMIN">Administrator</option><option value="TEACHER">Teacher</option><option value="PARENT">Parent</option><option value="STUDENT">Student</option></select>
+                  <select className={`${inputClass} w-auto min-w-[150px]`} value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)}><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="DISABLED">Disabled</option></select>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Created</th></tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {users.map((item) => <tr key={item.id}><td className="px-5 py-3"><p className="text-sm font-semibold text-gray-900">{item.name || 'Unnamed user'}</p><p className="text-xs text-gray-500">{item.email}</p></td><td className="px-5 py-3 text-sm text-gray-600">{item.role}</td><td className="px-5 py-3 text-xs text-gray-500">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</td></tr>)}
+                    </tbody>
+                  </table>
+                  {!users.length && <p className="p-6 text-center text-sm text-gray-500">No users found.</p>}
+                </div>
+              </section>
+            )}
+
+            {activeId === 'roles-permissions' && (
+              <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
+                  <div><h4 className="text-sm font-bold">Role permissions</h4><p className="mt-1 text-xs text-gray-500">Choose exactly what each role can access.</p></div>
+                  <button onClick={() => setShowAddRole(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"><UserPlus className="mr-2 inline h-4 w-4" />Add role</button>
+                </div>
+                <div className="space-y-4 p-5">
+                  {(Object.entries(rolePermissions) as Array<[string, string[]]>).map(([role, permissions]) => (
+                    <div key={role} className="rounded-xl border border-gray-200 p-4">
+                      <div className="mb-3 flex items-center justify-between"><h5 className="text-sm font-bold text-gray-900">{role}</h5><span className="text-xs text-gray-500">{permissions.length} permissions</span></div>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {permissionCatalog.map((permission) => <label key={permission} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700"><input type="checkbox" checked={permissions.includes(permission)} onChange={(event) => { const next = event.target.checked ? [...permissions, permission] : permissions.filter((item: string) => item !== permission); update('rolePermissions', { ...rolePermissions, [role]: next }); }} className="h-4 w-4 accent-blue-600" />{permission}</label>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <div className="grid gap-5 xl:grid-cols-2">
               <section className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -606,8 +718,19 @@ export default function Settings() {
                 </div>
               </section>
             )}
-          </main>
-        </div>
+        </main>
+        <Modal title="Add user" isOpen={showAddUser} onClose={() => setShowAddUser(false)}>
+          <div className="space-y-4">
+            <label className="block text-xs font-semibold text-gray-600">Full name<input className={`${inputClass} mt-1`} value={newUser.name} onChange={(event) => setNewUser({ ...newUser, name: event.target.value })} required /></label>
+            <label className="block text-xs font-semibold text-gray-600">Email address<input type="email" className={`${inputClass} mt-1`} value={newUser.email} onChange={(event) => setNewUser({ ...newUser, email: event.target.value })} required /></label>
+            <label className="block text-xs font-semibold text-gray-600">Role<select className={`${inputClass} mt-1`} value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="TEACHER">Teacher</option><option value="PARENT">Parent</option><option value="STUDENT">Student</option><option value="ADMIN">Administrator</option></select></label>
+            <label className="block text-xs font-semibold text-gray-600">Temporary password<input type="password" minLength={8} className={`${inputClass} mt-1`} value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} required /></label>
+            <button onClick={() => void addUser()} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white">Create user</button>
+          </div>
+        </Modal>
+        <Modal title="Add role" isOpen={showAddRole} onClose={() => setShowAddRole(false)}>
+          <div className="space-y-4"><label className="block text-xs font-semibold text-gray-600">Role name<input className={`${inputClass} mt-1`} value={newRoleName} onChange={(event) => setNewRoleName(event.target.value)} placeholder="Finance Officer" /></label><button onClick={addRole} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white">Create role</button></div>
+        </Modal>
       </div>
     </DashboardLayout>
   );
@@ -746,4 +869,18 @@ function Status({ label, value }: { label: string; value: string }) {
       <p className="font-bold text-white">{value}</p>
     </div>
   );
+}
+
+function UsersTable({ users, userSearch, setUserSearch, userRoleFilter, setUserRoleFilter, userStatusFilter, setUserStatusFilter, userPage, setUserPage, onAddUser, onReviewRegistration }: { users: any[]; userSearch: string; setUserSearch: (value: string) => void; userRoleFilter: string; setUserRoleFilter: (value: string) => void; userStatusFilter: string; setUserStatusFilter: (value: string) => void; userPage: number; setUserPage: React.Dispatch<React.SetStateAction<number>>; onAddUser: () => void; onReviewRegistration: (userId: string, status: 'APPROVED' | 'REJECTED') => Promise<void> }) {
+  const filtered = useMemo(() => users.filter((item) => {
+    const query = userSearch.trim().toLowerCase();
+    const matchesSearch = !query || `${item.name || ''} ${item.email || ''}`.toLowerCase().includes(query);
+    const matchesRole = userRoleFilter === 'ALL' || item.role === userRoleFilter;
+    const active = item.isActive !== false && item.status !== 'DISABLED';
+    return matchesSearch && matchesRole && (userStatusFilter === 'ALL' || (userStatusFilter === 'ACTIVE' ? active : !active));
+  }), [users, userSearch, userRoleFilter, userStatusFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
+  const rows = filtered.slice((userPage - 1) * 10, userPage * 10);
+  const pending = users.filter((item) => item.registrationStatus === 'PENDING');
+  return <section className="rounded-2xl border border-gray-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5"><div><h4 className="text-sm font-bold">Workspace users</h4><p className="mt-1 text-xs text-gray-500">Create accounts for administrators, teachers, parents, and students.</p></div><button onClick={onAddUser} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"><UserPlus className="mr-2 inline h-4 w-4" />Add user</button></div>{pending.length > 0 && <div className="border-b border-amber-100 bg-amber-50 p-5"><div className="mb-3 flex items-center justify-between"><div><h5 className="font-bold text-amber-950">Pending registrations</h5><p className="text-xs text-amber-800">Review self-registered accounts before they can sign in.</p></div><span className="rounded-full bg-amber-200 px-2.5 py-1 text-xs font-bold text-amber-900">{pending.length} awaiting review</span></div><div className="space-y-2">{pending.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3"><div><p className="text-sm font-bold text-gray-900">{item.name || 'Unnamed user'}</p><p className="text-xs text-gray-500">{item.email} · {item.role}</p><p className="text-xs text-gray-400">Registered {item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</p></div><div className="flex gap-2"><button onClick={() => void onReviewRegistration(item.id, 'REJECTED')} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">Reject</button><button onClick={() => void onReviewRegistration(item.id, 'APPROVED')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Approve</button></div></div>)}</div></div>}<div className="flex flex-nowrap items-center gap-3 overflow-x-auto border-b border-gray-100 bg-gray-50 p-4"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" /><input className={`${inputClass} pl-9`} placeholder="Search name or email" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} /></div><select className={`${inputClass} w-44 min-w-[11rem] shrink-0`} value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)}><option value="ALL">All roles</option><option value="ADMIN">Administrator</option><option value="TEACHER">Teacher</option><option value="PARENT">Parent</option><option value="STUDENT">Student</option></select><select className={`${inputClass} w-44 min-w-[11rem] shrink-0`} value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)}><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="DISABLED">Disabled</option></select></div><div className="overflow-x-auto"><table className="w-full text-left"><thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th></tr></thead><tbody className="divide-y divide-gray-100">{rows.map((item) => { const active = item.isActive !== false && item.status !== 'DISABLED'; return <tr key={item.id}><td className="px-5 py-3"><p className="text-sm font-semibold text-gray-900">{item.name || 'Unnamed user'}</p><p className="text-xs text-gray-500">{item.email}</p></td><td className="px-5 py-3 text-sm text-gray-600">{item.role}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{active ? 'Active' : 'Disabled'}</span></td><td className="px-5 py-3 text-xs text-gray-500">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td></tr>; })}</tbody></table>{!filtered.length && <p className="p-6 text-center text-sm text-gray-500">No users match the current search and filters.</p>}</div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 text-xs text-gray-500"><span>{filtered.length ? `${(userPage - 1) * 10 + 1}-${Math.min(userPage * 10, filtered.length)} of ${filtered.length} users` : '0 users'} · Showing 10 rows per page</span><div className="flex items-center gap-2"><button disabled={userPage <= 1} onClick={() => setUserPage((page) => Math.max(1, page - 1))} className="rounded-lg border border-gray-200 px-3 py-1.5 font-semibold disabled:opacity-40">Previous</button><span>Page {Math.min(userPage, pageCount)} of {pageCount}</span><button disabled={userPage >= pageCount} onClick={() => setUserPage((page) => Math.min(pageCount, page + 1))} className="rounded-lg border border-gray-200 px-3 py-1.5 font-semibold disabled:opacity-40">Next</button></div></div></section>;
 }

@@ -18,6 +18,9 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (key === "site" && user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Only administrators can maintain the public website." }, { status: 403 });
+  }
 
   const value = await getSetting(key, null);
   return NextResponse.json(value ?? {});
@@ -39,29 +42,31 @@ export async function PUT(
     key === "branding" ? payload.schoolName :
     key === "school-profile" ? payload.schoolName :
     undefined;
+  const logoUrl = key === "branding" || key === "school-profile" ? payload.logoUrl : undefined;
 
-  if (typeof schoolName === "string" && schoolName.trim()) {
+  if ((typeof schoolName === "string" && schoolName.trim()) || typeof logoUrl === "string") {
     const [branding, schoolProfile, site] = await Promise.all([
       getSetting("branding", fallbackBranding),
       getSetting("school-profile", {} as Record<string, unknown>),
       getSetting("site", {} as Record<string, unknown>)
     ]);
 
-    const nextSchoolName = schoolName.trim();
+    const nextSchoolName = typeof schoolName === "string" ? schoolName.trim() : undefined;
     await Promise.all([
       putSetting("branding", {
         ...branding,
         ...(key === "branding" ? payload : {}),
-        schoolName: nextSchoolName
+        ...(key === "school-profile" && typeof logoUrl === "string" ? { logoUrl } : {}),
+        ...(nextSchoolName ? { schoolName: nextSchoolName } : {})
       }),
       putSetting("school-profile", {
         ...schoolProfile,
         ...(key === "school-profile" ? payload : {}),
-        schoolName: nextSchoolName
+        ...(nextSchoolName ? { schoolName: nextSchoolName } : {})
       }),
       putSetting("site", {
         ...site,
-        heroTitle: nextSchoolName
+        ...(nextSchoolName ? { heroTitle: nextSchoolName } : {})
       })
     ]);
   }

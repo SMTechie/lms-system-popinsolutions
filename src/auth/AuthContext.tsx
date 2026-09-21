@@ -51,11 +51,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
     if (!email || !password || !name) throw new Error("Enter your name, email and password.");
-    const response = await apiRequest<{ token: string; user: { id: string; email: string; name?: string | null; role: string } }>("/auth/signup", {
+    const response = await apiRequest<{ token?: string; pending?: boolean; message?: string; user: { id: string; email: string; name?: string | null; role: string } }>("/auth/signup", {
       method: "POST",
       auth: false,
       body: JSON.stringify({ email, password, name, loginUrl: `${window.location.origin}/login` })
     });
+    if (response.pending || !response.token) throw new Error(response.message || "Registration submitted for approval.");
     tokenStorage.set(response.token);
     setToken(response.token);
     setUser(response.user);

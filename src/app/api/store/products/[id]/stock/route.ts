@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/src/server/http";
+import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 
 export async function POST(
@@ -9,6 +9,7 @@ export async function POST(
 ) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
+  if (!canManageStore(user)) return forbidden();
   const { id } = await params;
   const body = await request.json();
   const data = await getOperationsData();
@@ -16,7 +17,14 @@ export async function POST(
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
   const previousQuantity = Number(product.stockQuantity || 0);
-  const change = Number(body.quantity || 0) * (["REMOVE", "DAMAGED"].includes(body.type) ? -1 : 1);
+  const quantity = Number(body.quantity);
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return NextResponse.json({ error: "Quantity must be a positive whole number." }, { status: 400 });
+  }
+  const change = quantity * (["REMOVE", "DAMAGED"].includes(body.type) ? -1 : 1);
+  if (change < 0 && previousQuantity + change < 0) {
+    return NextResponse.json({ error: "Stock cannot be reduced below zero." }, { status: 409 });
+  }
   product.stockQuantity = Math.max(previousQuantity + change, 0);
   data.store.stockHistory[id] = [
     {

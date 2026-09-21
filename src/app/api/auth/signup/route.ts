@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAuthToken, hashPassword } from "@/src/server/auth";
-import { renderWelcomeEmail, sendTransactionalEmail } from "@/src/server/email";
+import { hashPassword } from "@/src/server/auth";
 import { prisma } from "@/src/server/prisma";
 
 export async function POST(request: NextRequest) {
@@ -8,7 +7,6 @@ export async function POST(request: NextRequest) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const name = String(body.name || "").trim();
-  const loginUrl = String(body.loginUrl || "").trim() || `${request.nextUrl.origin}/login`;
 
   if (!email || !password || !name) {
     return NextResponse.json({ error: "Name, email and password are required." }, { status: 400 });
@@ -28,27 +26,14 @@ export async function POST(request: NextRequest) {
       email,
       name,
       role: "PARENT",
-      passwordHash: await hashPassword(password)
+      passwordHash: await hashPassword(password),
+      registrationStatus: "PENDING"
     }
   });
 
-  const welcomeEmail = renderWelcomeEmail(name, loginUrl);
-  await sendTransactionalEmail({
-    to: email,
-    subject: welcomeEmail.subject,
-    html: welcomeEmail.html,
-    text: welcomeEmail.text,
-  });
-
-  const token = await createAuthToken({
-    sub: user.id,
-    email: user.email,
-    role: user.role,
-    name: user.name
-  });
-
   return NextResponse.json({
-    token,
+    pending: true,
+    message: "Registration submitted. An administrator must approve your account before you can sign in.",
     user: {
       id: user.id,
       email: user.email,

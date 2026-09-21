@@ -28,8 +28,16 @@ export async function listAdminUsers() {
   });
 
   return users.map((user) => ({
-    ...user,
-    status: "active",
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    registrationStatus: user.registrationStatus,
+    registrationReviewedAt: user.registrationReviewedAt,
+    registrationRejectionReason: user.registrationRejectionReason,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    status: user.registrationStatus === "REJECTED" ? "rejected" : user.registrationStatus === "PENDING" ? "pending" : "active",
     lastLogin: user.updatedAt.toISOString(),
     avatar: initials(user.name || user.email),
   }));

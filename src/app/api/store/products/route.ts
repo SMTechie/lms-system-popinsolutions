@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/src/server/http";
+import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { createStoreProduct, getOperationsData, saveOperationsData } from "@/src/server/operations";
 
 export async function POST(request: NextRequest) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
+  if (!canManageStore(user)) return forbidden();
 
   const data = await getOperationsData();
   const body = await request.json();

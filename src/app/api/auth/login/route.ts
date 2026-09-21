@@ -16,6 +16,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   }
 
+  if (user.registrationStatus === "PENDING") {
+    return NextResponse.json({ error: "Your registration is awaiting administrator approval." }, { status: 403 });
+  }
+  if (user.registrationStatus === "REJECTED") {
+    return NextResponse.json({ error: user.registrationRejectionReason || "Your registration was rejected. Please contact the school office." }, { status: 403 });
+  }
+
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });

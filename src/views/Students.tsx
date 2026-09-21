@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, ArrowRightLeft, Download, GraduationCap, Link2, Plus, Search, Upload, UserRound, Users } from "lucide-react";
+import { Archive, ArrowRightLeft, Download, GraduationCap, ImagePlus, Link2, Plus, Search, Upload, UserRound, Users } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
 import { apiRequest } from "../lib/api";
@@ -14,6 +14,7 @@ const emptyStudent = {
   gender: "",
   email: "",
   phone: "",
+  photoUrl: "",
   studentNumber: "",
   gradeId: "",
   classId: "",
@@ -109,6 +110,15 @@ export default function Students() {
     } catch (error: any) {
       notifyAction(error.message || "Could not save student", "error");
     }
+  };
+
+  const attachStudentPhoto = (file?: File) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return notifyAction("Student pictures must be under 2MB.", "warning");
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return notifyAction("Use a PNG, JPG, or WEBP image.", "warning");
+    const reader = new FileReader();
+    reader.onload = () => setEditing((current: any) => ({ ...current, photoUrl: typeof reader.result === "string" ? reader.result : "" }));
+    reader.readAsDataURL(file);
   };
 
   const linkGuardian = async () => {
@@ -310,12 +320,7 @@ export default function Students() {
                     }}
                     className="cursor-pointer border-t hover:bg-blue-50/40"
                   >
-                    <td className="px-5 py-4">
-                      <b>
-                        {item.firstName} {item.lastName}
-                      </b>
-                      <p className="text-xs text-gray-500">{item.identityNumber || "No identity number"}</p>
-                    </td>
+                    <td className="px-5 py-4"><div className="flex items-center gap-3">{item.photoUrl ? <img src={item.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{`${item.firstName || ''}${item.lastName || ''}`.slice(0, 2).toUpperCase()}</div>}<div><b>{item.firstName} {item.lastName}</b><p className="text-xs text-gray-500">{item.identityNumber || "No identity number"}</p></div></div></td>
                     <td>{item.studentNumber}</td>
                     <td>
                       {grades.find((grade: any) => grade.id === item.gradeId)?.name || "Unassigned"} ·{" "}
@@ -396,6 +401,14 @@ export default function Students() {
               onChange={(e) => setEditing({ ...editing, medicalNotes: e.target.value })}
             />
           </Field>
+          <Field label="Student picture">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-4 text-sm font-semibold text-gray-500 hover:border-blue-300 hover:text-blue-600">
+              <ImagePlus className="h-5 w-5" />
+              {editing?.photoUrl ? "Replace student picture" : "Attach student picture"}
+              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => attachStudentPhoto(event.target.files?.[0])} />
+            </label>
+            {editing?.photoUrl && <img src={editing.photoUrl} alt="Student preview" className="mt-2 h-32 w-32 rounded-xl object-cover" />}
+          </Field>
         </div>
         <button onClick={() => void save()} className="mt-5 w-full rounded-lg bg-blue-600 py-3 text-sm font-bold text-white">
           Save student
@@ -439,6 +452,8 @@ export default function Students() {
                 Archive
               </button>
             </div>
+
+            {selected.photoUrl && <div className="flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4"><img src={selected.photoUrl} alt={`${selected.firstName} ${selected.lastName}`} className="h-20 w-20 rounded-xl object-cover" /><div><p className="text-xs font-bold uppercase tracking-wide text-gray-500">Student picture</p><p className="mt-1 text-sm text-gray-700">Profile picture attached to this student record.</p></div></div>}
 
             <section>
               <h3 className="font-bold">Guardians</h3>

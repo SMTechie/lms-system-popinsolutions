@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/src/server/http";
+import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 
 export async function PATCH(
@@ -8,6 +8,7 @@ export async function PATCH(
 ) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
+  if (!canManageStore(user)) return forbidden();
   const { id } = await params;
   const body = await request.json();
   const data = await getOperationsData();
@@ -27,6 +28,7 @@ export async function DELETE(
 ) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
+  if (!canManageStore(user)) return forbidden();
   const { id } = await params;
   const data = await getOperationsData();
   data.store.products = data.store.products.filter((entry) => entry.id !== id);

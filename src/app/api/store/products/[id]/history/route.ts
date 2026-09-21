@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/src/server/http";
+import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData } from "@/src/server/operations";
 
 export async function GET(
@@ -8,6 +8,7 @@ export async function GET(
 ) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
+  if (!canManageStore(user)) return forbidden();
   const { id } = await params;
   const data = await getOperationsData();
   return NextResponse.json({

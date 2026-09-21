@@ -13,85 +13,13 @@ function createCleanPortalData(input: {
 }) {
   const data = defaultPortalData();
 
-  data.grades = [
-    { id: "grade-r", name: "Grade R", code: "GR" },
-    { id: "grade-1", name: "Grade 1", code: "G1" },
-    { id: "grade-2", name: "Grade 2", code: "G2" },
-    { id: "grade-3", name: "Grade 3", code: "G3" },
-    { id: "grade-4", name: "Grade 4", code: "G4" },
-    { id: "grade-5", name: "Grade 5", code: "G5" },
-    { id: "grade-6", name: "Grade 6", code: "G6" },
-    { id: "grade-7", name: "Grade 7", code: "G7" },
-  ];
-
-  data.subjects = [
-    { id: "subject-math", name: "Mathematics", code: "MATH" },
-    { id: "subject-english", name: "English Home Language", code: "ENG" },
-    { id: "subject-life-skills", name: "Life Skills", code: "LS" },
-    { id: "subject-natural-science", name: "Natural Sciences", code: "NS" },
-    { id: "subject-social-science", name: "Social Sciences", code: "SS" },
-  ];
-
-  data.classes = [];
-  data.learners = [];
-
-  data.parent = {
-    guardianEmail: input.parentEmail,
-    guardianName: input.parentName,
-    profile: {
-      phone: "",
-      alternatePhone: "",
-      preferredChannel: "EMAIL",
-      addressLine1: "",
-      suburb: "",
-      city: "",
-    },
-    settings: {
-      emailNotifications: true,
-      smsNotifications: false,
-      pushNotifications: true,
-      weeklyDigest: true,
-      absenceAlerts: true,
-      feeReminders: true,
-      disciplineAlerts: true,
-    },
-    fees: [],
-    payments: [],
-    paymentPlans: [],
-    attendance: [],
-    appointments: [],
-    reports: [],
-    messages: [],
-    notifications: [],
-    orders: [],
-    tickets: [],
-  };
-
-  data.teacher = {
-    profile: {
-      department: "",
-      phone: "",
-      alternatePhone: "",
-      room: "",
-      bio: "",
-      notificationPreferences: {
-        emailNotifications: true,
-        inAppNotifications: true,
-        parentMessageAlerts: true,
-        attendanceReminders: true,
-      },
-    },
-    dashboard: {
-      today: [],
-      homeworkDueToday: [],
-      parentQueries: [],
-      attendanceTasks: [],
-      lessonPlansIncomplete: [],
-      requisitions: [],
-      announcements: [],
-      teacherAssistant: { readyForReview: 0, needsAttention: 0 },
-    },
-  };
+  data.parent.guardianEmail = input.parentEmail;
+  data.parent.guardianName = input.parentName;
+  data.classes = data.classes.map((schoolClass: any, index: number) => ({
+    ...schoolClass,
+    teacherName: index === 0 ? "Thabo Mthembu" : "Lerato Naidoo",
+    teacherEmail: index === 0 ? "teacher@popin.school" : "teacher.naidoo@popin.school",
+  }));
 
   data.applications.forms = (data.applications.forms || []).map((form: any) => ({
     ...form,
@@ -170,6 +98,10 @@ async function main() {
   const teacherEmail = process.env.SEED_TEACHER_EMAIL || "teacher@popin.school";
   const teacherPassword = process.env.SEED_TEACHER_PASSWORD || "ChangeMe123!";
   const teacherName = process.env.SEED_TEACHER_NAME || "Teacher Account";
+  const secondTeacherEmail = process.env.SEED_SECOND_TEACHER_EMAIL || "teacher.naidoo@popin.school";
+  const secondTeacherPassword = process.env.SEED_SECOND_TEACHER_PASSWORD || "ChangeMe123!";
+  const secondTeacherName = process.env.SEED_SECOND_TEACHER_NAME || "Lerato Naidoo";
+  const studentPassword = process.env.SEED_STUDENT_PASSWORD || "ChangeMe123!";
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   const parentPasswordHash = await bcrypt.hash(parentPassword, 10);
   const teacherPasswordHash = await bcrypt.hash(teacherPassword, 10);
@@ -193,6 +125,24 @@ async function main() {
       passwordHash
     }
   });
+
+  const secondTeacherPasswordHash = await bcrypt.hash(secondTeacherPassword, 10);
+  await prisma.user.upsert({
+    where: { email: secondTeacherEmail },
+    update: { name: secondTeacherName, role: "TEACHER", passwordHash: secondTeacherPasswordHash },
+    create: { email: secondTeacherEmail, name: secondTeacherName, role: "TEACHER", passwordHash: secondTeacherPasswordHash }
+  });
+
+  for (const student of [
+    { email: "ari.khumalo@school.co.za", name: "Ari Khumalo" },
+    { email: "mila.khumalo@school.co.za", name: "Mila Khumalo" },
+  ]) {
+    await prisma.user.upsert({
+      where: { email: student.email },
+      update: { name: student.name, role: "STUDENT", passwordHash: await bcrypt.hash(studentPassword, 10) },
+      create: { email: student.email, name: student.name, role: "STUDENT", passwordHash: await bcrypt.hash(studentPassword, 10) }
+    });
+  }
 
   await prisma.user.upsert({
     where: { email: parentEmail },

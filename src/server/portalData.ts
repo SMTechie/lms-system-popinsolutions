@@ -1067,6 +1067,7 @@ export function buildHostelOverview(data: PortalData) {
     maintenance: data.hostel.maintenance,
     visitors: data.hostel.visitors,
     charges: data.hostel.charges,
+    payments: (data.hostel as any).payments || [],
     notices: data.hostel.notices,
     scanEvents: (data.hostel.scanEvents || []).map((item) => ({
       ...item,

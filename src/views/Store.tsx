@@ -72,20 +72,24 @@ export default function Store() {
   const canManage = permissions.includes('uniform_store:store.manage');
   const schoolName = branding?.schoolName || 'Your School';
 
-  const loadCatalog = async () => {
+  const loadCatalog = async (visibility: 'public' | 'internal' = canManage && mode === 'management' ? 'internal' : 'public') => {
     setLoading(true); setError('');
     try {
-      const data = await apiRequest<any>('/store/catalog?visibility=internal&includeImages=true&includeVariants=true');
+      const data = await apiRequest<any>(`/store/catalog?visibility=${visibility}&includeImages=true&includeVariants=true`);
       setProducts(data.products || []); setCategories(data.categories || []);
     } catch (err: any) { setError(err.message || 'Unable to load the catalog.'); }
     finally { setLoading(false); }
   };
 
   useEffect(() => {
-    void Promise.all([
-      loadCatalog(),
-      apiRequest<any>('/auth/me').then((me) => setPermissions(me.permissions || [])).catch(() => setPermissions([]))
-    ]);
+    void apiRequest<any>('/auth/me').then((me) => {
+      const nextPermissions = me.permissions || [];
+      setPermissions(nextPermissions);
+      return loadCatalog(nextPermissions.includes('uniform_store:store.manage') ? 'internal' : 'public');
+    }).catch(() => {
+      setPermissions([]);
+      return loadCatalog('public');
+    });
   }, []);
 
   const filtered = useMemo(() => products.filter((product) => {
@@ -207,7 +211,7 @@ export default function Store() {
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setMode('storefront')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'storefront' ? 'bg-white text-blue-800' : 'bg-white/10 hover:bg-white/20'}`}><StoreIcon className="mr-2 inline h-4 w-4" />Storefront</button>
               <button onClick={showOrders} className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'orders' ? 'bg-white text-blue-800' : 'bg-white/10 hover:bg-white/20'}`}><History className="mr-2 inline h-4 w-4" />Order History</button>
-              {canManage && <button onClick={() => setMode('management')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'management' ? 'bg-amber-400 text-slate-950' : 'bg-white/10 hover:bg-white/20'}`}><Warehouse className="mr-2 inline h-4 w-4" />Manage Products</button>}
+              {canManage && <button onClick={() => { setMode('management'); void loadCatalog('internal'); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'management' ? 'bg-amber-400 text-slate-950' : 'bg-white/10 hover:bg-white/20'}`}><Warehouse className="mr-2 inline h-4 w-4" />Manage Products</button>}
               {mode === 'storefront' && <button onClick={() => setShowCart(true)} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold"><ShoppingCart className="mr-2 inline h-4 w-4" />Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})</button>}
             </div>
           </div>

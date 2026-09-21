@@ -451,6 +451,20 @@ export default function Hostel() {
                 </div>,
               ])}
             />
+            <div className="mt-6">
+              <h3 className="mb-3 text-sm font-bold text-slate-900">Parent payment submissions</h3>
+              <Table
+                heads={['Learner', 'Amount', 'Method', 'Reference', 'Status', 'Actions']}
+                rows={(data.payments || []).map((item: any) => [
+                  learnerName({ learner: (data.learners || []).find((learner: any) => learner.id === item.learnerId) }),
+                  money(Number(item.amount || 0)),
+                  item.method,
+                  item.reference,
+                  <Status key={item.id} value={item.status} />,
+                  item.status === 'PENDING_VERIFICATION' ? <div key={`${item.id}-actions`} className="flex gap-2"><button onClick={() => void submit(`/hostel/payments/${item.id}/verify`, 'POST', {})} className="text-xs font-bold text-emerald-700">Verify</button><button onClick={() => void submit(`/hostel/payments/${item.id}/reject`, 'POST', {})} className="text-xs font-bold text-red-700">Reject</button></div> : '-',
+                ])}
+              />
+            </div>
           </Panel>
         )}
 
@@ -978,7 +992,9 @@ function Editor({
               stopCamera();
               return;
             }
-          } catch {}
+          } catch {
+            frameId = window.requestAnimationFrame(() => void scan());
+          }
           frameId = window.requestAnimationFrame(() => void scan());
         };
 

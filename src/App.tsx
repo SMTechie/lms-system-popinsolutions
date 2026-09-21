@@ -14,6 +14,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { BrandingProvider } from './settings/BrandingContext';
 import AppDocumentTitle from './components/AppDocumentTitle';
 import PwaRegistration from './components/PwaRegistration';
+import BrandFavicon from './components/BrandFavicon';
 
 const Boards = lazy(() => import('./views/Boards'));
 const Analytics = lazy(() => import('./views/Analytics'));
@@ -39,6 +40,8 @@ const SupplyChain = lazy(() => import('./views/SupplyChain'));
 const Students = lazy(() => import('./views/Students'));
 const IdentityIntegrations = lazy(() => import('./views/IdentityIntegrations'));
 const Hostel = lazy(() => import('./views/Hostel'));
+const WebsiteMaintenance = lazy(() => import('./views/WebsiteMaintenance'));
+const SchoolWebsite = lazy(() => import('./views/SchoolWebsite'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -52,12 +55,14 @@ const App: React.FC = () => {
       <BrandingProvider>
         <Router>
           <AppDocumentTitle />
+          <BrandFavicon />
           <PwaRegistration />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Login />} />
               <Route path="/applications/new" element={<ApplicationsPublic />} />
+              <Route path="/school-website/*" element={<SchoolWebsite />} />
               <Route element={<RequireAuth />}>
                 <Route path="/store" element={<Store />} />
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'PARENT']} />}>
@@ -72,6 +77,9 @@ const App: React.FC = () => {
                   <Route path="/boards" element={<Boards />} />
                   <Route path="/ai-assist" element={<AIAssist />} />
                   <Route path="/communications" element={<Communications />} />
+                  <Route element={<RequireAuth allowedRoles={['ADMIN']} />}>
+                    <Route path="/website" element={<WebsiteMaintenance />} />
+                  </Route>
                   <Route path="/payments" element={<Payments />} />
                   <Route path="/requisitions" element={<Requisitions />} />
                   <Route path="/requisitions/new" element={<RequisitionCreate />} />

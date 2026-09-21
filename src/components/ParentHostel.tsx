@@ -13,6 +13,7 @@ export default function ParentHostel({ learnerId, permissions }: { learnerId: st
   const [mode, setMode] = useState('');
   const [form, setForm] = useState<any>({ academicYear: new Date().getFullYear() });
   const [rotatingQr, setRotatingQr] = useState(false);
+  const [paymentDraft, setPaymentDraft] = useState({ chargeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '' });
   const passRef = useRef<HTMLDivElement | null>(null);
 
   const load = () =>
@@ -55,6 +56,21 @@ export default function ParentHostel({ learnerId, permissions }: { learnerId: st
     }
   };
 
+  const submitPayment = async () => {
+    if (!paymentDraft.chargeId || !paymentDraft.amount) {
+      notifyAction('Select a hostel charge and enter the amount.', 'error');
+      return;
+    }
+    try {
+      await apiRequest(`/parent/children/${learnerId}/hostel/charges/payments`, { method: 'POST', body: JSON.stringify({ ...paymentDraft, amount: Number(paymentDraft.amount) }) });
+      setPaymentDraft({ chargeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '' });
+      await load();
+      notifyAction('Hostel payment submitted for verification.', 'success');
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not submit hostel payment.', 'error');
+    }
+  };
+
   const printPass = () => {
     const markup = passRef.current?.innerHTML;
     if (!markup) return;
@@ -79,6 +95,13 @@ export default function ParentHostel({ learnerId, permissions }: { learnerId: st
     printWindow.print();
   };
 
+  const charges = Array.isArray(data?.charges) ? data.charges : [];
+  const notices = Array.isArray(data?.notices) ? data.notices : [];
+  const movementHistory = Array.isArray(data?.movementHistory) ? data.movementHistory : [];
+  const mealActivity = useMemo(() => movementHistory.filter((movement: any) => String(movement.eventType || '').startsWith('MEAL_')), [movementHistory]);
+  const rollCallActivity = useMemo(() => movementHistory.filter((movement: any) => String(movement.eventType || '').startsWith('ROLL_CALL_')), [movementHistory]);
+  const gateActivity = useMemo(() => movementHistory.filter((movement: any) => ['CHECKED_IN_GATE', 'CHECKED_OUT_GATE', 'CHECKED_IN_RESIDENCE', 'CHECKED_OUT_RESIDENCE'].includes(String(movement.eventType || ''))), [movementHistory]);
+
   if (!permissions?.viewHostel) {
     return (
       <Card>
@@ -97,29 +120,9 @@ export default function ParentHostel({ learnerId, permissions }: { learnerId: st
     );
   }
 
-  const charges = Array.isArray(data.charges) ? data.charges : [];
-  const notices = Array.isArray(data.notices) ? data.notices : [];
-  const movementHistory = Array.isArray(data.movementHistory) ? data.movementHistory : [];
   const place = data.allocation?.bed?.room?.block;
   const qrCodeValue = String(data.qrCodeValue || '');
   const isHostelEnrolled = ['RESERVED', 'CHECKED_IN'].includes(String(data.allocation?.status || ''));
-  const mealActivity = useMemo(
-    () => movementHistory.filter((movement: any) => String(movement.eventType || '').startsWith('MEAL_')),
-    [movementHistory],
-  );
-  const rollCallActivity = useMemo(
-    () => movementHistory.filter((movement: any) => String(movement.eventType || '').startsWith('ROLL_CALL_')),
-    [movementHistory],
-  );
-  const gateActivity = useMemo(
-    () =>
-      movementHistory.filter((movement: any) =>
-        ['CHECKED_IN_GATE', 'CHECKED_OUT_GATE', 'CHECKED_IN_RESIDENCE', 'CHECKED_OUT_RESIDENCE'].includes(
-          String(movement.eventType || ''),
-        ),
-      ),
-    [movementHistory],
-  );
   const latestMeal = mealActivity[0] || null;
   const latestRollCall = rollCallActivity[0] || null;
   const latestGate = gateActivity[0] || null;
@@ -193,6 +196,23 @@ export default function ParentHostel({ learnerId, permissions }: { learnerId: st
           </p>
         </Card>
       </div>
+
+      {permissions.viewHostelBilling && charges.length > 0 && (
+        <Card icon={CreditCard} title="Submit hostel payment">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Charge">
+              <select className={input} value={paymentDraft.chargeId} onChange={(event) => setPaymentDraft({ ...paymentDraft, chargeId: event.target.value })}>
+                <option value="">Select charge</option>
+                {charges.map((charge: any) => <option key={charge.id} value={charge.id}>{charge.description} - R {Number(charge.amount || 0).toFixed(2)}</option>)}
+              </select>
+            </Field>
+            <Field label="Amount"><input className={input} type="number" min="0" value={paymentDraft.amount} onChange={(event) => setPaymentDraft({ ...paymentDraft, amount: event.target.value })} /></Field>
+            <Field label="Method"><select className={input} value={paymentDraft.method} onChange={(event) => setPaymentDraft({ ...paymentDraft, method: event.target.value })}><option>EFT</option><option>CASH</option><option>CARD</option></select></Field>
+            <Field label="Reference"><input className={input} value={paymentDraft.reference} onChange={(event) => setPaymentDraft({ ...paymentDraft, reference: event.target.value })} /></Field>
+          </div>
+          <button onClick={() => void submitPayment()} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Submit payment</button>
+        </Card>
+      )}
 
       {isHostelEnrolled && (
         <div className="grid gap-4 md:grid-cols-3">

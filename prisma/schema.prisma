@@ -13,6 +13,10 @@ model User {
   passwordHash String
   name         String?
   role         String   @default("ADMIN")
+  registrationStatus String @default("APPROVED")
+  registrationReviewedAt DateTime?
+  registrationReviewedBy String?
+  registrationRejectionReason String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

@@ -8,13 +8,25 @@ export async function POST(request: NextRequest) {
   if (!user) return unauthorized();
   const body = await request.json();
   const data = await getOperationsData();
-  const items = (body.items || []).map((line: any) => {
-    const product = data.store.products.find((entry) => entry.id === line.productId);
-    if (!product) {
-      throw new Error("Product not found");
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    return NextResponse.json({ error: "Your cart is empty." }, { status: 400 });
+  }
+  const requested = new Map<string, number>();
+  for (const line of body.items) {
+    const quantity = Number(line.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return NextResponse.json({ error: "Each item must have a positive whole-number quantity." }, { status: 400 });
     }
-    const quantity = Number(line.quantity || 0);
-    product.stockQuantity = Math.max(Number(product.stockQuantity || 0) - quantity, 0);
+    requested.set(String(line.productId), (requested.get(String(line.productId)) || 0) + quantity);
+  }
+  const items = Array.from(requested.entries()).map(([productId, quantity]) => {
+    const product = data.store.products.find((entry) => entry.id === productId);
+    if (!product) {
+      return null;
+    }
+    if (!product.isActive || !product.allowOnlinePurchase) return null;
+    if (quantity > Number(product.stockQuantity || 0)) return null;
+    product.stockQuantity = Number(product.stockQuantity || 0) - quantity;
     return {
       id: randomUUID(),
       productId: product.id,
@@ -23,17 +35,21 @@ export async function POST(request: NextRequest) {
       price: Number(product.basePrice || 0)
     };
   });
+  if (items.some((item) => !item)) {
+    return NextResponse.json({ error: "One or more items are unavailable or do not have enough stock." }, { status: 409 });
+  }
+  const validItems = items as Array<{ id: string; productId: string; name: string; quantity: number; price: number }>;
   const order = {
     id: randomUUID(),
     userId: user.id,
     status: "PLACED",
     paymentMethod: body.paymentMethod || "eft",
-    totalAmount: items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0),
+    totalAmount: validItems.reduce((sum: number, item) => sum + item.price * item.quantity, 0),
     createdAt: new Date().toISOString(),
-    items
+    items: validItems
   };
   data.store.orders.unshift(order);
-  for (const item of items) {
+  for (const item of validItems) {
     data.store.salesHistory[item.productId] = [
       {
         id: randomUUID(),

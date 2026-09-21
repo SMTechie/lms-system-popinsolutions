@@ -664,6 +664,41 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     return json(users);
   }
 
+  if (method === "POST" && path[1] === "users") {
+    ensureRole(user, ["ADMIN"]);
+    const body = await readBody(request);
+    const email = String(body.email || "").trim().toLowerCase();
+    const name = String(body.name || "").trim();
+    const password = String(body.password || "");
+    const role = String(body.role || "TEACHER").toUpperCase();
+    if (!name || !email || !password) return json({ error: "Name, email, and password are required." }, 400);
+    if (password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    if (!["ADMIN", "TEACHER", "PARENT", "STUDENT"].includes(role)) return json({ error: "Invalid user role." }, 400);
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return json({ error: "A user with this email already exists." }, 409);
+    const created = await prisma.user.create({
+      data: { name, email, role, passwordHash: await hashPassword(password) },
+    });
+    await appendAuditLog({ action: "CREATE", entity: "User", entityId: created.id, actorId: user.email, metadata: { email, role } });
+    return json({ id: created.id, name: created.name, email: created.email, role: created.role }, 201);
+  }
+
+  if (method === "PATCH" && path[1] === "users" && path[2] && path[3] === "registration") {
+    ensureRole(user, ["ADMIN"]);
+    const body = await readBody(request);
+    const registrationStatus = String(body.status || "").toUpperCase();
+    if (!["APPROVED", "REJECTED"].includes(registrationStatus)) return json({ error: "Registration status must be APPROVED or REJECTED." }, 400);
+    const rejectionReason = registrationStatus === "REJECTED" ? String(body.reason || "Registration rejected by administrator.").trim() : null;
+    const target = await prisma.user.findUnique({ where: { id: path[2] } });
+    if (!target) return json({ error: "User registration not found." }, 404);
+    const updated = await prisma.user.update({
+      where: { id: target.id },
+      data: { registrationStatus, registrationReviewedAt: new Date(), registrationReviewedBy: user.email, registrationRejectionReason: rejectionReason },
+    });
+    await appendAuditLog({ action: registrationStatus === "APPROVED" ? "APPROVE" : "REJECT", entity: "UserRegistration", entityId: updated.id, actorId: user.email, metadata: { email: updated.email, reason: rejectionReason } });
+    return json({ id: updated.id, email: updated.email, name: updated.name, role: updated.role, registrationStatus: updated.registrationStatus, registrationReviewedAt: updated.registrationReviewedAt, registrationRejectionReason: updated.registrationRejectionReason });
+  }
+
   if (path[1] === "payments") {
     data.parent = data.parent || {};
     data.parent.fees = data.parent.fees || [];
@@ -1164,6 +1199,8 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   data.parent.notifications = data.parent.notifications || [];
   data.parent.profile = data.parent.profile || {};
   data.parent.settings = data.parent.settings || {};
+  data.hostel = data.hostel || {};
+  data.hostel.payments = data.hostel.payments || [];
 
   if (method === "GET" && path.join("/") === "parent/children") {
     const links = data.learners.flatMap((learner: any) =>
@@ -1216,6 +1253,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     const appointments = (data.parent.appointments || [])
       .filter((item: any) => item.learnerId === learnerId)
       .sort((a: any, b: any) => String(a.startsAt).localeCompare(String(b.startsAt)));
+    const learnerClassIds = new Set(classes.map((item: any) => item.id));
     return json({
       homework: workItems.filter((item: any) => item.type === "HOMEWORK"),
       attendance,
@@ -1223,6 +1261,9 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       announcements: data.teacher.dashboard.announcements || [],
       appointments,
       discipline,
+      timetable: classes.flatMap((item: any) => (item.timetable || []).map((period: any) => ({ ...period, className: item.name }))),
+      resources: (data.teacher.resources || []).filter((item: any) => !item.classId || learnerClassIds.has(item.classId)),
+      calendar: (data.teacher.calendar || []).filter((item: any) => !item.classId || learnerClassIds.has(item.classId)),
     });
   }
 
@@ -1421,7 +1462,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     return json(payment);
   }
 
-  if (method === "GET" && path[1] === "children" && learnerId && path[3] === "applications") {
+  if (method === "GET" && path[1] === "children" && learnerId && path[3] === "applications" && path[4] !== "forms") {
     const scoped = data.applications.forms.flatMap((form: any) =>
       (form.submissions || [])
         .filter(
@@ -1436,6 +1477,24 @@ async function handleParent(request: NextRequest, method: string, path: string[]
         })),
     );
     return json(scoped);
+  }
+
+  if (method === "GET" && path[1] === "children" && learnerId && path[3] === "applications" && path[4] === "forms") {
+    return json((data.applications.forms || []).filter((form: any) => form.admissionsOpenState !== "closed").map((form: any) => ({
+      id: form.id, name: form.name, slug: form.slug, version: (form.versions || []).find((item: any) => item.id === form.publishedVersionId) || (form.versions || [])[0] || null,
+    })));
+  }
+
+  if (method === "POST" && path[1] === "children" && learnerId && path[3] === "applications" && path[4] === "submit") {
+    if (!learnerLink?.submitApplications) return json({ error: "Application submission is not enabled for this learner." }, 403);
+    const body = await readBody(request);
+    const form = (data.applications.forms || []).find((item: any) => item.id === body.formId || item.slug === body.slug);
+    if (!form || form.admissionsOpenState === "closed") return json({ error: "Application form is not available." }, 400);
+    const submission = { id: uid("submission"), submissionReference: `APP-${String((form.submissions || []).length + 1).padStart(4, "0")}`, status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "parent-portal", learnerId, guardianEmail: parentEmail || data.parent.guardianEmail || user.email, applicantName: learnerName(data, learnerId), formId: form.id, formName: form.name, answers: body.answers || {}, ...body };
+    form.submissions = [submission, ...(form.submissions || [])];
+    data.parent.notifications.unshift({ id: uid("parent-notification"), learnerId, type: "application", title: "Application submitted", message: `${form.name} was submitted for ${learnerName(data, learnerId)}.`, createdAt: new Date().toISOString(), readAt: null });
+    await savePortalData(data);
+    return json(submission, 201);
   }
 
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "reports") {
@@ -1456,14 +1515,28 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     return json({
       application: overview.applications.find((item: any) => item.learnerId === learnerId) || null,
       allocation,
-      charges: data.hostel.charges.filter((item: any) => item.learnerId === learnerId),
+      charges: learnerLink?.viewHostelBilling ? data.hostel.charges.filter((item: any) => item.learnerId === learnerId) : [],
+      payments: learnerLink?.viewHostelBilling ? data.hostel.payments.filter((item: any) => item.learnerId === learnerId) : [],
       notices: data.hostel.notices,
       qrCodeValue,
       qrCodeLabel: learner?.studentNumber || learnerId,
       qrPassVersion: qrPass?.version || 1,
       qrIssuedAt: qrPass?.issuedAt || null,
-      movementHistory: buildHostelMovementHistory(data, learnerId),
+      movementHistory: learnerLink?.viewHostelMovement ? buildHostelMovementHistory(data, learnerId) : [],
     });
+  }
+
+  if (method === "POST" && path[1] === "children" && learnerId && path[3] === "hostel" && path[4] === "charges" && path[5] === "payments") {
+    if (!learnerLink?.viewHostelBilling) return json({ error: "Hostel billing access is not enabled for this learner." }, 403);
+    const body = await readBody(request);
+    const amount = Number(body.amount || 0);
+    const charge = data.hostel.charges.find((item: any) => item.id === body.chargeId && item.learnerId === learnerId);
+    if (!charge || amount <= 0) return json({ error: "Select a valid hostel charge and payment amount." }, 400);
+    const payment = { id: uid("hostel-payment"), learnerId, chargeId: charge.id, amount, method: body.method || "EFT", reference: body.reference || `HOSTEL-${Date.now()}`, proofFileName: body.proofFileName || "", status: "PENDING_VERIFICATION", submittedAt: new Date().toISOString() };
+    data.hostel.payments.unshift(payment);
+    addParentHostelNotification(data, learnerId, "Hostel payment submitted", `A hostel payment of R ${amount.toFixed(2)} was submitted for ${learnerName(data, learnerId)}.`);
+    await savePortalData(data);
+    return json(payment, 201);
   }
 
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "discipline") {
@@ -1539,6 +1612,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   }
 
   if (method === "POST" && path[1] === "children" && learnerId && path[3] === "hostel" && path[4] === "applications") {
+    if (!learnerLink?.applyHostel) return json({ error: "Hostel applications are not enabled for this learner." }, 403);
     const body = await readBody(request);
     data.hostel.applications.unshift({ id: uid("hostel-app"), learnerId, status: "PENDING", ...body });
     await savePortalData(data);
@@ -1546,6 +1620,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   }
 
   if (method === "POST" && path[1] === "children" && learnerId && path[3] === "hostel" && path[4] === "concerns") {
+    if (!learnerLink?.submitHostelConcerns) return json({ error: "Hostel concerns are not enabled for this learner." }, 403);
     const body = await readBody(request);
     data.hostel.maintenance.unshift({ id: uid("maintenance"), learnerId, source: "Parent Portal", status: "OPEN", priority: "MEDIUM", ...body });
     await savePortalData(data);
@@ -1553,6 +1628,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   }
 
   if (method === "POST" && path[1] === "children" && learnerId && path[3] === "hostel" && path[4] === "qr" && path[5] === "rotate") {
+    if (!learnerLink?.viewHostel) return json({ error: "Hostel access is not enabled for this learner." }, 403);
     const learner = data.learners.find((item: any) => item.id === learnerId);
     if (!learner) return json({ error: "Learner not found." }, 404);
     data.hostel.qrPasses = data.hostel.qrPasses || [];
@@ -1663,7 +1739,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
 
   if (method === "GET" && path.join("/") === "parent/orders") {
     return json(
-      (data.parent.orders || []).filter((item: any) => !parentEmail || data.parent.guardianEmail?.toLowerCase() === parentEmail),
+      (data.parent.orders || []).filter(() => !parentEmail || data.parent.guardianEmail?.toLowerCase() === parentEmail),
     );
   }
 
@@ -1780,6 +1856,14 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   data.teacher = data.teacher || {};
   data.teacher.dashboard = data.teacher.dashboard || {};
   data.teacher.profile = data.teacher.profile || {};
+  data.teacher.resources = data.teacher.resources || [];
+  data.teacher.progressReports = data.teacher.progressReports || [];
+  data.teacher.calendar = data.teacher.calendar || [];
+  data.teacher.notifications = data.teacher.notifications || [];
+  data.teacher.gradebook = data.teacher.gradebook || {};
+  const teacherClasses = user.role === "ADMIN"
+    ? data.classes
+    : data.classes.filter((item: any) => item.teacherEmail?.toLowerCase() === user.email?.toLowerCase());
   if (method === "GET" && path.join("/") === "teacher/dashboard") {
     const parentQueries = (data.parent?.messages || [])
       .filter((thread: any) => thread.status !== "CLOSED")
@@ -1808,7 +1892,98 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     data.teacher.dashboard.appointmentRequests = appointmentRequests;
     return json(data.teacher.dashboard);
   }
-  if (method === "GET" && path.join("/") === "teacher/classes") return json(data.classes);
+  if (method === "GET" && path.join("/") === "teacher/classes") return json(teacherClasses);
+  if (method === "POST" && path.join("/") === "teacher/timetable") {
+    const body = await readBody(request);
+    const schoolClass = teacherClasses.find((item: any) => item.id === body.classId);
+    if (!schoolClass) return json({ error: "Class not found." }, 404);
+    const startsAt = String(body.startsAt || "");
+    const endsAt = String(body.endsAt || "");
+    if (!body.subject || !startsAt || !endsAt || startsAt >= endsAt) return json({ error: "Enter a valid subject and time range." }, 400);
+    const day = String(body.day || "Monday");
+    const overlaps = (schoolClass.timetable || []).some((item: any) => item.day === day && startsAt < item.endsAt && endsAt > item.startsAt);
+    if (overlaps) return json({ error: "This class already has a timetable period during that time." }, 409);
+    const room = String(body.room || schoolClass.room || "");
+    const crossClassConflict = data.classes.some((candidate: any) =>
+      (candidate.timetable || []).some((item: any) => item.day === day && startsAt < item.endsAt && endsAt > item.startsAt &&
+        ((room && item.room === room) || candidate.teacherEmail?.toLowerCase() === user.email?.toLowerCase())),
+    );
+    if (crossClassConflict) return json({ error: "This teacher or room is already booked during that time." }, 409);
+    const period = { id: uid("timetable"), day, subject: String(body.subject).trim(), startsAt, endsAt, room, class: { name: schoolClass.name, room: schoolClass.room } };
+    schoolClass.timetable = [...(schoolClass.timetable || []), period].sort((a: any, b: any) => `${a.day || ""}${a.startsAt}`.localeCompare(`${b.day || ""}${b.startsAt}`));
+    await savePortalData(data);
+    return json(period, 201);
+  }
+
+  if ((method === "PATCH" || method === "DELETE") && path[1] === "timetable" && path[2]) {
+    const schoolClass = teacherClasses.find((item: any) => (item.timetable || []).some((period: any) => period.id === path[2]));
+    if (!schoolClass) return json({ error: "Timetable period not found." }, 404);
+    if (method === "DELETE") {
+      schoolClass.timetable = (schoolClass.timetable || []).filter((period: any) => period.id !== path[2]);
+      await savePortalData(data);
+      return json({ ok: true });
+    }
+    const body = await readBody(request);
+    const period = (schoolClass.timetable || []).find((item: any) => item.id === path[2]);
+    const updated = { ...period, ...body };
+    if (!updated.subject || !updated.startsAt || !updated.endsAt || updated.startsAt >= updated.endsAt) {
+      return json({ error: "Enter a valid subject and time range." }, 400);
+    }
+    const overlaps = (schoolClass.timetable || []).some((item: any) => item.id !== path[2] && item.day === updated.day && updated.startsAt < item.endsAt && updated.endsAt > item.startsAt);
+    if (overlaps) return json({ error: "This class already has a timetable period during that time." }, 409);
+    Object.assign(period, { day: String(updated.day || "Monday"), subject: String(updated.subject).trim(), startsAt: String(updated.startsAt), endsAt: String(updated.endsAt), room: String(updated.room || schoolClass.room || "") });
+    await savePortalData(data);
+    return json(period);
+  }
+  if (method === "GET" && path.join("/") === "teacher/resources") return json(data.teacher.resources);
+  if (method === "POST" && path.join("/") === "teacher/resources") {
+    const body = await readBody(request);
+    if (!String(body.title || "").trim() || !String(body.url || "").trim()) return json({ error: "A resource title and file/link are required." }, 400);
+    const resource = { id: uid("resource"), title: String(body.title).trim(), url: String(body.url).trim(), category: String(body.category || "General"), classId: body.classId || "", createdAt: new Date().toISOString(), createdBy: user.email };
+    data.teacher.resources.unshift(resource);
+    await savePortalData(data);
+    return json(resource, 201);
+  }
+  if (method === "GET" && path.join("/") === "teacher/reports") return json(data.teacher.progressReports);
+  if (method === "POST" && path.join("/") === "teacher/reports") {
+    const body = await readBody(request);
+    const schoolClass = teacherClasses.find((item: any) => item.id === body.classId);
+    const learner = schoolClass?.learners?.find((item: any) => item.id === body.learnerId);
+    if (!schoolClass || !learner || !String(body.comment || "").trim()) return json({ error: "Select a learner and enter a progress comment." }, 400);
+    const report = { id: uid("progress-report"), learnerId: learner.id, learnerName: `${learner.firstName} ${learner.lastName}`, classId: schoolClass.id, className: schoolClass.name, term: String(body.term || "Current term"), comment: String(body.comment).trim(), createdAt: new Date().toISOString(), teacherEmail: user.email };
+    data.teacher.progressReports.unshift(report);
+    await savePortalData(data);
+    return json(report, 201);
+  }
+  if (method === "GET" && path.join("/") === "teacher/calendar") return json(data.teacher.calendar);
+  if (method === "POST" && path.join("/") === "teacher/calendar") {
+    const body = await readBody(request);
+    if (!String(body.title || "").trim() || !String(body.startsAt || "").trim()) return json({ error: "A title and start time are required." }, 400);
+    const event = { id: uid("teacher-event"), title: String(body.title).trim(), type: String(body.type || "Lesson"), startsAt: String(body.startsAt), endsAt: String(body.endsAt || ""), notes: String(body.notes || ""), classId: body.classId || "", createdAt: new Date().toISOString(), teacherEmail: user.email };
+    data.teacher.calendar.unshift(event);
+    await savePortalData(data);
+    return json(event, 201);
+  }
+  if (method === "GET" && path.join("/") === "teacher/notifications") return json(data.teacher.notifications);
+  if (method === "POST" && path.join("/") === "teacher/notifications/read-all") {
+    data.teacher.notifications.forEach((item: any) => { item.readAt = item.readAt || new Date().toISOString(); });
+    await savePortalData(data);
+    return json(data.teacher.notifications);
+  }
+  if (method === "GET" && path.join("/") === "teacher/gradebook") {
+    const assessments = teacherClasses.flatMap((schoolClass: any) => (schoolClass.workItems || []).filter((item: any) => item.type === "ASSESSMENT").map((item: any) => ({ ...item, classId: schoolClass.id, className: schoolClass.name, learners: schoolClass.learners || [] })));
+    const assessmentId = request.nextUrl.searchParams.get("assessmentId");
+    return json({ assessments, entries: assessmentId ? data.teacher.gradebook[assessmentId] || [] : [] });
+  }
+  if (method === "POST" && path.join("/") === "teacher/gradebook") {
+    const body = await readBody(request);
+    const assessment = teacherClasses.flatMap((schoolClass: any) => (schoolClass.workItems || []).filter((item: any) => item.type === "ASSESSMENT").map((item: any) => ({ ...item, classId: schoolClass.id, learners: schoolClass.learners || [] }))).find((item: any) => item.id === body.assessmentId);
+    if (!assessment || !Array.isArray(body.entries)) return json({ error: "Assessment or grade entries not found." }, 400);
+    const learnerIds = new Set((assessment.learners || []).map((item: any) => item.id));
+    data.teacher.gradebook[assessment.id] = body.entries.filter((item: any) => learnerIds.has(item.learnerId)).map((item: any) => ({ learnerId: item.learnerId, mark: item.mark === "" ? "" : Number(item.mark), comment: String(item.comment || ""), updatedAt: new Date().toISOString(), updatedBy: user.email }));
+    await savePortalData(data);
+    return json(data.teacher.gradebook[assessment.id]);
+  }
   if (method === "GET" && path.join("/") === "teacher/messages") {
     return json(
       (data.parent?.messages || [])
@@ -1905,8 +2080,8 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     );
   }
   if (method === "GET" && path.join("/") === "teacher/assessments/overview") {
-    const classMap = new Map(data.classes.map((item: any) => [item.id, item]));
-    const classroomAssessments = data.classes.flatMap((schoolClass: any) =>
+    const classMap = new Map(teacherClasses.map((item: any) => [item.id, item]));
+    const classroomAssessments = teacherClasses.flatMap((schoolClass: any) =>
       (schoolClass.workItems || [])
         .filter((item: any) => item.type === "ASSESSMENT")
         .map((item: any) => ({
@@ -2016,7 +2191,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   if (method === "POST" && path.join("/") === "teacher/work-items") {
     const body = await readBody(request);
     const workItem = { id: uid("work"), ...body, createdAt: new Date().toISOString() };
-    const targetClasses = body.classId ? data.classes.filter((item: any) => item.id === body.classId) : data.classes;
+    const targetClasses = body.classId ? teacherClasses.filter((item: any) => item.id === body.classId) : teacherClasses;
     targetClasses.forEach((item: any) => item.workItems.unshift(workItem));
     data.teacher.dashboard.announcements = body.type === "ANNOUNCEMENT" ? [workItem, ...(data.teacher.dashboard.announcements || [])] : data.teacher.dashboard.announcements;
     await savePortalData(data);
@@ -2072,6 +2247,8 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
 
 async function handleStudent(request: NextRequest, method: string, path: string[], data: any, user: any) {
   ensureRole(user, ["ADMIN", "STUDENT"]);
+  data.student = data.student || {};
+  data.student.submissions = data.student.submissions || [];
   const learner = resolveStudentLearner(data, user, request);
   if (!learner) return json({ error: "Student profile not found for this account." }, 404);
 
@@ -2089,6 +2266,17 @@ async function handleStudent(request: NextRequest, method: string, path: string[
     .filter((item: any) => item.learnerId === learner.id && item.parentVisible !== false)
     .sort((a: any, b: any) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || "")));
   const announcements = data.teacher?.dashboard?.announcements || [];
+  const resources = [
+    ...(data.communications?.resources || []).filter((item: any) => ["PARENT_STUDENT", "STUDENT"].includes(item.visibility)),
+    ...(data.teacher?.resources || []).filter((item: any) => !item.classId || learnerClasses.some((schoolClass: any) => schoolClass.id === item.classId)),
+  ];
+  const calendar = [
+    ...(data.communications?.calendar || []),
+    ...(data.teacher?.calendar || []).filter((item: any) => !item.classId || learnerClasses.some((schoolClass: any) => schoolClass.id === item.classId)),
+  ];
+  const grades = workItems.filter((item: any) => item.type === "ASSESSMENT").flatMap((assessment: any) =>
+    (data.teacher?.gradebook?.[assessment.id] || []).filter((entry: any) => entry.learnerId === learner.id).map((entry: any) => ({ ...entry, assessmentId: assessment.id, assessmentTitle: assessment.title })),
+  );
   const notifications = [
     ...((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id)),
     ...((data.notifications || []).filter((item: any) => item.type === "announcement" || item.type === "approval")),
@@ -2108,8 +2296,29 @@ async function handleStudent(request: NextRequest, method: string, path: string[
       reports,
       discipline,
       announcements,
-      resources: data.communications.resources.filter((item: any) => ["PARENT_STUDENT", "STUDENT"].includes(item.visibility)),
-      calendar: data.communications.calendar,
+      grades,
+      submissions: data.student.submissions.filter((item: any) => item.learnerId === learner.id),
+      resources,
+      calendar,
+    });
+  }
+
+  if (method === "GET" && path.join("/") === "student/hostel") {
+    const overview = buildHostelOverview(data);
+    const allocation = overview.allocations.find((item: any) => item.learnerId === learner.id) || null;
+    const learnerRecord = data.learners.find((item: any) => item.id === learner.id);
+    const hadActivePass = learnerRecord ? !!getActiveHostelQrPass(data, learnerRecord) : true;
+    const qrPass = learnerRecord ? ensureHostelQrPass(data, learnerRecord) : null;
+    if (learnerRecord && !hadActivePass && allocation) await savePortalData(data);
+    return json({
+      allocation,
+      application: overview.applications.find((item: any) => item.learnerId === learner.id) || null,
+      charges: data.hostel.charges.filter((item: any) => item.learnerId === learner.id),
+      notices: data.hostel.notices,
+      movementHistory: buildHostelMovementHistory(data, learner.id),
+      qrCodeValue: allocation ? buildHostelQrValue(data, learnerRecord) : "",
+      qrCodeLabel: learnerRecord?.studentNumber || learner.id,
+      qrPassVersion: qrPass?.version || 1,
     });
   }
 
@@ -2141,6 +2350,15 @@ async function handleStudent(request: NextRequest, method: string, path: string[
     return json(notifications);
   }
 
+  if (method === "POST" && path[1] === "notifications" && path[2] && path[3] === "read") {
+    const notification = (data.parent?.notifications || []).find((item: any) => item.id === path[2] && item.learnerId === learner.id) ||
+      (data.notifications || []).find((item: any) => item.id === path[2] && ["announcement", "approval"].includes(item.type));
+    if (!notification) return json({ error: "Notification not found." }, 404);
+    notification.readAt = notification.readAt || new Date().toISOString();
+    await savePortalData(data);
+    return json(notification);
+  }
+
   if (method === "POST" && path.join("/") === "student/notifications/read-all") {
     for (const item of data.parent?.notifications || []) {
       if (item.learnerId === learner.id) item.readAt = item.readAt || new Date().toISOString();
@@ -2151,6 +2369,18 @@ async function handleStudent(request: NextRequest, method: string, path: string[
         String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
       ),
     );
+  }
+
+  if (method === "POST" && path[1] === "work-items" && path[2] && path[3] === "submissions") {
+    const workItem = workItems.find((item: any) => item.id === path[2]);
+    if (!workItem || !["HOMEWORK", "ASSESSMENT"].includes(workItem.type)) return json({ error: "Teaching item not found." }, 404);
+    const body = await readBody(request);
+    if (!String(body.content || body.fileName || "").trim()) return json({ error: "Add a response or file name before submitting." }, 400);
+    const existing = data.student.submissions.find((item: any) => item.workItemId === workItem.id && item.learnerId === learner.id);
+    const submission = { id: existing?.id || uid("student-submission"), learnerId: learner.id, workItemId: workItem.id, title: workItem.title, content: String(body.content || ""), fileName: String(body.fileName || ""), status: "SUBMITTED", submittedAt: new Date().toISOString() };
+    if (existing) Object.assign(existing, submission); else data.student.submissions.unshift(submission);
+    await savePortalData(data);
+    return json(submission, existing ? 200 : 201);
   }
 
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
@@ -2455,6 +2685,26 @@ async function handleHostel(request: NextRequest, method: string, path: string[]
       scanRoles: byStationRole.map(([stationRole, count]) => ({ stationRole, count })),
       scanExceptions: overview.scanExceptions || [],
     });
+  }
+  if (method === "GET" && path[1] === "payments") return json(data.hostel.payments || []);
+  if (method === "POST" && path[1] === "payments" && path[2] && ["verify", "reject"].includes(path[3])) {
+    const payment = (data.hostel.payments || []).find((item: any) => item.id === path[2]);
+    if (!payment) return json({ error: "Hostel payment not found." }, 404);
+    const body = await readBody(request);
+    payment.status = path[3] === "verify" ? "VERIFIED" : "REJECTED";
+    payment.reviewedAt = new Date().toISOString();
+    payment.reviewedBy = user?.name || user?.email;
+    payment.reviewNote = body.note || "";
+    if (payment.status === "VERIFIED") {
+      const charge = (data.hostel.charges || []).find((item: any) => item.id === payment.chargeId);
+      if (charge) {
+        charge.paidAmount = Math.min(Number(charge.amount || 0), Number(charge.paidAmount || 0) + Number(payment.amount || 0));
+        charge.status = charge.paidAmount >= Number(charge.amount || 0) ? "PAID" : "PARTIALLY_PAID";
+      }
+    }
+    addParentHostelNotification(data, payment.learnerId, `Hostel payment ${payment.status.toLowerCase()}`, `Your hostel payment of R ${Number(payment.amount || 0).toFixed(2)} was ${payment.status.toLowerCase()}.`);
+    await savePortalData(data);
+    return json(payment);
   }
 
   if (method === "POST") {

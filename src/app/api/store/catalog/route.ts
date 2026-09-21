@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/src/server/http";
+import { canManageStore, requireUser, unauthorized, forbidden } from "@/src/server/http";
 import { getOperationsData } from "@/src/server/operations";
 
 export async function GET(request: NextRequest) {
@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   if (visibility === "internal") {
     const user = await requireUser(request);
     if (!user) return unauthorized();
+    if (!canManageStore(user)) return forbidden();
   }
 
   const data = await getOperationsData();

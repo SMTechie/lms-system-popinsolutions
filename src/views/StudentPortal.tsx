@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, CalendarDays, ClipboardCheck, FileText, GraduationCap, MessageSquare, ScrollText, Settings2 } from 'lucide-react';
+import { BedDouble, Bell, BookOpen, CalendarDays, ClipboardCheck, FileText, GraduationCap, MessageSquare, ScrollText } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import Modal from '../components/Modal';
 import PortalLoader from '../components/PortalLoader';
@@ -14,6 +14,9 @@ const sections = [
   { key: 'reports', label: 'Reports', icon: ScrollText },
   { key: 'announcements', label: 'Announcements', icon: MessageSquare },
   { key: 'resources', label: 'Resources', icon: FileText },
+  { key: 'calendar', label: 'School Calendar', icon: CalendarDays },
+  { key: 'grades', label: 'Grades', icon: ClipboardCheck },
+  { key: 'hostel', label: 'Hostel', icon: BedDouble },
   { key: 'notifications', label: 'Notifications', icon: Bell },
 ] as const;
 
@@ -21,11 +24,14 @@ export default function StudentPortal() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [submissionWork, setSubmissionWork] = useState<any>(null);
+  const [submissionDraft, setSubmissionDraft] = useState({ content: '', fileName: '' });
 
   const load = async () => {
     setLoading(true);
     try {
-      setData(await apiRequest('/student/overview'));
+      const [overview, hostel] = await Promise.all([apiRequest('/student/overview'), apiRequest('/student/hostel')]);
+      setData({ ...overview, hostel });
     } catch (error: any) {
       notifyAction(error.message || 'Could not load student portal.', 'error');
     } finally {
@@ -44,14 +50,17 @@ export default function StudentPortal() {
     if (loading) return <PortalLoader label="Loading student workspace..." className="border-0 p-0 shadow-none" />;
     if (!data) return <Empty text="Student information is not available yet." />;
 
-    if (active === 'homework') return <SimpleList items={data.homework} empty="No homework has been published yet." dateKey="dueAt" />;
+    if (active === 'homework') return <HomeworkList items={data.homework} submissions={data.submissions} onSubmit={setSubmissionWork} />;
     if (active === 'timetable') return <TimetableList items={data.timetable} />;
     if (active === 'assessments') return <SimpleList items={data.assessments} empty="No assessments are available yet." dateKey="dueAt" />;
     if (active === 'attendance') return <AttendanceList items={data.attendance} />;
     if (active === 'reports') return <ReportsList items={data.reports} />;
     if (active === 'announcements') return <SimpleList items={data.announcements} empty="No announcements are available right now." />;
     if (active === 'resources') return <ResourcesList items={data.resources} />;
-    if (active === 'notifications') return <NotificationsList items={data.notifications} />;
+    if (active === 'calendar') return <CalendarList items={data.calendar} />;
+    if (active === 'grades') return <GradesList items={data.grades} />;
+    if (active === 'hostel') return <StudentHostel data={data.hostel} />;
+    if (active === 'notifications') return <NotificationsList items={data.notifications} onRead={async (id) => { try { await apiRequest(`/student/notifications/${id}/read`, { method: 'POST' }); await load(); } catch (error: any) { notifyAction(error.message || 'Could not update notification.', 'error'); } }} onReadAll={async () => { try { await apiRequest('/student/notifications/read-all', { method: 'POST' }); await load(); } catch (error: any) { notifyAction(error.message || 'Could not update notifications.', 'error'); } }} />;
     return <Empty text="This student module is ready." />;
   };
 
@@ -130,6 +139,14 @@ export default function StudentPortal() {
       >
         {renderContent()}
       </Modal>
+      <Modal open={!!submissionWork} onClose={() => setSubmissionWork(null)} title={`Submit work - ${submissionWork?.title || ''}`}>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Submit a written response or provide the name of your uploaded file.</p>
+          <textarea className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm" rows={6} placeholder="Your response" value={submissionDraft.content} onChange={(event) => setSubmissionDraft({ ...submissionDraft, content: event.target.value })} />
+          <input className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm" placeholder="File name (optional)" value={submissionDraft.fileName} onChange={(event) => setSubmissionDraft({ ...submissionDraft, fileName: event.target.value })} />
+          <button onClick={async () => { try { await apiRequest(`/student/work-items/${submissionWork.id}/submissions`, { method: 'POST', body: JSON.stringify(submissionDraft) }); notifyAction('Work submitted successfully.', 'success'); setSubmissionDraft({ content: '', fileName: '' }); setSubmissionWork(null); await load(); } catch (error: any) { notifyAction(error.message || 'Could not submit work.', 'error'); } }} className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white">Submit work</button>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }
@@ -151,6 +168,11 @@ function SimpleList({ items, empty, dateKey }: { items: any[]; empty: string; da
       ))}
     </div>
   );
+}
+
+function HomeworkList({ items, submissions, onSubmit }: { items: any[]; submissions: any[]; onSubmit: (item: any) => void }) {
+  if (!items?.length) return <Empty text="No homework has been published yet." />;
+  return <div className="space-y-3">{items.map((item: any) => { const submission = (submissions || []).find((entry: any) => entry.workItemId === item.id); return <div key={item.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm text-slate-900">{item.title}</b><p className="mt-2 text-sm text-slate-600">{item.instructions || 'No instructions provided.'}</p></div><span className="text-xs text-slate-500">{item.dueAt ? `Due ${new Date(item.dueAt).toLocaleDateString()}` : 'No due date'}</span></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-slate-500">{submission ? `Submitted ${new Date(submission.submittedAt).toLocaleString()}` : 'Not submitted'}</span><button onClick={() => onSubmit(item)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white">{submission ? 'Resubmit' : 'Submit work'}</button></div></div>; })}</div>;
 }
 
 function TimetableList({ items }: { items: any[] }) {
@@ -212,19 +234,35 @@ function ResourcesList({ items }: { items: any[] }) {
         <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
           <b className="text-sm text-slate-900">{item.title}</b>
           <p className="mt-1 text-xs text-slate-500">{item.category} • {item.visibility}</p>
-          <p className="mt-2 text-sm text-blue-600">{item.url}</p>
+          <a href={item.url} target="_blank" rel="noreferrer" className="mt-2 block text-sm text-blue-600">Open resource</a>
         </div>
       ))}
     </div>
   );
 }
 
-function NotificationsList({ items }: { items: any[] }) {
+function CalendarList({ items }: { items: any[] }) {
+  if (!items?.length) return <Empty text="No school calendar events are available yet." />;
+  return <div className="space-y-3">{items.map((item: any, index: number) => <div key={item.id || index} className="rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><b className="text-sm text-slate-900">{item.title || item.type || 'School event'}</b><span className="text-xs text-slate-500">{item.startsAt ? new Date(item.startsAt).toLocaleString() : item.date || ''}</span></div><p className="mt-2 text-sm text-slate-600">{item.notes || item.description || item.location || ''}</p></div>)}</div>;
+}
+
+function GradesList({ items }: { items: any[] }) {
+  if (!items?.length) return <Empty text="No grades have been published yet." />;
+  return <div className="space-y-3">{items.map((item: any, index: number) => <div key={item.id || index} className="rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><b className="text-sm text-slate-900">{item.assessmentTitle || 'Assessment'}</b><span className="font-bold text-blue-600">{item.mark}</span></div><p className="mt-2 text-sm text-slate-600">{item.comment || 'No feedback provided.'}</p></div>)}</div>;
+}
+
+function StudentHostel({ data }: { data: any }) {
+  if (!data?.allocation && !data?.application) return <Empty text="No hostel placement or application is linked to your learner account." />;
+  const balance = (data.charges || []).reduce((total: number, item: any) => total + Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
+  return <div className="space-y-4"><div className="grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-semibold uppercase text-slate-400">Placement</p><p className="mt-2 font-bold text-slate-900">{data.allocation?.status?.replaceAll('_', ' ') || 'Not allocated'}</p><p className="mt-1 text-xs text-slate-500">{data.allocation?.bed?.room?.roomNumber || 'Room pending'}</p></div><div className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-semibold uppercase text-slate-400">Application</p><p className="mt-2 font-bold text-slate-900">{data.application?.status?.replaceAll('_', ' ') || 'None'}</p></div><div className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-semibold uppercase text-slate-400">Balance</p><p className="mt-2 font-bold text-slate-900">R {balance.toFixed(2)}</p></div></div><section className="rounded-2xl border border-slate-200 p-4"><h3 className="font-bold text-slate-900">Hostel notices</h3>{(data.notices || []).length ? <div className="mt-3 space-y-2">{data.notices.map((notice: any) => <div key={notice.id} className="rounded-xl bg-slate-50 p-3"><p className="text-sm font-semibold">{notice.title}</p><p className="text-sm text-slate-600">{notice.message}</p></div>)}</div> : <Empty text="No hostel notices." />}</section><section className="rounded-2xl border border-slate-200 p-4"><h3 className="font-bold text-slate-900">Recent hostel activity</h3>{(data.movementHistory || []).length ? <div className="mt-3 space-y-2">{data.movementHistory.slice(0, 10).map((item: any) => <div key={item.id} className="flex justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm"><span>{String(item.eventType || item.status || 'Activity').replaceAll('_', ' ')}</span><span className="text-xs text-slate-500">{item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}</span></div>)}</div> : <Empty text="No hostel activity recorded." />}</section></div>;
+}
+
+function NotificationsList({ items, onRead, onReadAll }: { items: any[]; onRead: (id: string) => void; onReadAll: () => void }) {
   if (!items?.length) return <Empty text="No notifications are waiting for you." />;
   return (
-    <div className="space-y-3">
+    <div className="space-y-3"><div className="flex justify-end"><button onClick={onReadAll} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Mark all as read</button></div>
       {items.map((item: any, index: number) => (
-        <div key={item.id || index} className="rounded-2xl border border-slate-200 p-4">
+        <button key={item.id || index} onClick={() => item.id && onRead(item.id)} className={`block w-full rounded-2xl border p-4 text-left ${item.readAt ? 'border-slate-200' : 'border-blue-200 bg-blue-50'}`}>
           <div className="flex justify-between gap-3">
             <b className="text-sm text-slate-900">{item.title}</b>
             <span className="text-xs text-slate-500">
@@ -232,7 +270,7 @@ function NotificationsList({ items }: { items: any[] }) {
             </span>
           </div>
           <p className="mt-2 text-sm text-slate-600">{item.message}</p>
-        </div>
+        </button>
       ))}
     </div>
   );

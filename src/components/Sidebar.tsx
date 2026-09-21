@@ -22,6 +22,7 @@ import {
   Ticket,
   Truck,
   Users,
+  Globe2,
   X,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -48,12 +49,11 @@ const navGroups: NavGroup[] = [
       { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'TEACHER'] },
       { path: '/analytics', label: 'Analytics', icon: BarChart3, roles: ['ADMIN', 'TEACHER'] },
       { path: '/boards', label: 'Boards', icon: Kanban, roles: ['ADMIN', 'TEACHER'] },
-      { path: '/student-portal', label: 'Student Portal', icon: GraduationCap, roles: ['ADMIN', 'STUDENT'] },
     ],
   },
   {
     label: 'Operations',
-    roles: ['ADMIN', 'TEACHER', 'PARENT'],
+    roles: ['ADMIN', 'TEACHER', 'PARENT', 'STUDENT'],
     items: [
       { path: '/requisitions', label: 'Requisitions', icon: ShoppingCart, roles: ['ADMIN', 'TEACHER'] },
       { path: '/supply-chain', label: 'Supply Chain', icon: Truck, roles: ['ADMIN', 'TEACHER'] },
@@ -64,6 +64,7 @@ const navGroups: NavGroup[] = [
       { path: '/communications', label: 'Communications', icon: Presentation, roles: ['ADMIN', 'TEACHER'] },
       { path: '/payments', label: 'Payments', icon: ReceiptText, roles: ['ADMIN', 'TEACHER'] },
       { path: '/ai-assist', label: 'AI Assist', icon: MessageCircleCode, roles: ['ADMIN', 'TEACHER'] },
+      { path: '/website', label: 'Website', icon: Globe2, roles: ['ADMIN'] },
     ],
   },
   {
@@ -75,6 +76,7 @@ const navGroups: NavGroup[] = [
       { path: '/hostel', label: 'Hostel', icon: BedDouble, roles: ['ADMIN', 'TEACHER'] },
       { path: '/teacher-portal', label: 'Teacher Portal', icon: Presentation, roles: ['ADMIN', 'TEACHER'] },
       { path: '/parent-portal', label: 'Parent Portal', icon: Users, roles: ['ADMIN', 'PARENT'] },
+      { path: '/student-portal', label: 'Student Portal', icon: GraduationCap, roles: ['ADMIN', 'STUDENT'] },
     ],
   },
   {
@@ -132,7 +134,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         .filter((group) => !group.roles || group.roles.includes(activeRole))
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => !item.roles || item.roles.includes(activeRole)),
+          items: group.items.filter((item) => !item.roles || item.roles.includes(activeRole)).map((item) => activeRole === 'PARENT' && item.path === '/store' ? { ...item, path: '/school-website/store', label: 'Uniform Storefront' } : item),
         }))
         .filter((group) => group.items.length > 0),
     [activeRole],

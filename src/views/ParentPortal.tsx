@@ -6,7 +6,6 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardCheck,
-  CreditCard,
   FileText,
   Gavel,
   LifeBuoy,
@@ -36,6 +35,10 @@ type SectionDefinition = {
 
 const sections: readonly SectionDefinition[] = [
   { key: 'homework', label: 'Homework', icon: BookOpen, permission: 'viewHomework' },
+  { key: 'timetable', label: 'Timetable', icon: CalendarDays },
+  { key: 'resources', label: 'Learning Resources', icon: BookOpen },
+  { key: 'calendar', label: 'School Calendar', icon: CalendarDays },
+  { key: 'assessments', label: 'Assessments', icon: ClipboardCheck, permission: 'viewReports' },
   { key: 'attendance', label: 'Attendance', icon: ClipboardCheck },
   { key: 'discipline', label: 'Disciplinary', icon: Gavel },
   { key: 'announcements', label: 'Announcements', icon: MessageSquare, permission: 'receiveAnnouncements' },
@@ -56,6 +59,10 @@ type SectionKey = SectionDefinition['key'];
 
 const learnerRequiredSections = new Set<SectionKey>([
   'homework',
+  'timetable',
+  'resources',
+  'calendar',
+  'assessments',
   'attendance',
   'discipline',
   'announcements',
@@ -97,6 +104,7 @@ export default function ParentPortal() {
   const [accountDraft, setAccountDraft] = useState<any>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [excuseDrafts, setExcuseDrafts] = useState<Record<string, string>>({});
+  const [applicationDraft, setApplicationDraft] = useState({ formId: '', notes: '' });
 
   const selected = children.find((item) => item?.learner?.id === selectedId);
   const currentSection = sections.find((section) => section.key === active) || null;
@@ -159,7 +167,10 @@ export default function ParentPortal() {
         if (active === 'attendance') payload = await apiRequest(`/parent/children/${selectedId}/attendance`);
         else if (active === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
         else if (active === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
-        else if (active === 'applications') payload = await apiRequest(`/parent/children/${selectedId}/applications`);
+        else if (active === 'applications') {
+          const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
+          payload = { items, forms };
+        }
         else if (active === 'appointments') payload = await apiRequest(`/parent/children/${selectedId}/appointments`);
         else if (active === 'messages') payload = await apiRequest(`/parent/children/${selectedId}/messages`);
         else if (active === 'reports') payload = await apiRequest(`/parent/children/${selectedId}/reports`);
@@ -177,7 +188,7 @@ export default function ParentPortal() {
       }
     };
 
-    if (['homework', 'announcements', 'hostel', 'store'].includes(active)) {
+    if (['homework', 'timetable', 'resources', 'calendar', 'assessments', 'announcements', 'hostel', 'store'].includes(active)) {
       setLoadingModule(false);
       setModuleData(null);
       return;
@@ -202,7 +213,7 @@ export default function ParentPortal() {
   const refreshActive = async () => {
     if (!active) return;
     if (selectedId) await readOverview(selectedId);
-    if (['homework', 'announcements', 'hostel', 'store'].includes(active)) return;
+    if (['homework', 'timetable', 'resources', 'calendar', 'assessments', 'announcements', 'hostel', 'store'].includes(active)) return;
     setActive((value) => value);
     const section = active;
     setLoadingModule(true);
@@ -211,7 +222,10 @@ export default function ParentPortal() {
       if (section === 'attendance') payload = await apiRequest(`/parent/children/${selectedId}/attendance`);
       else if (section === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
       else if (section === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
-      else if (section === 'applications') payload = await apiRequest(`/parent/children/${selectedId}/applications`);
+      else if (section === 'applications') {
+        const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
+        payload = { items, forms };
+      }
       else if (section === 'appointments') payload = await apiRequest(`/parent/children/${selectedId}/appointments`);
       else if (section === 'messages') payload = await apiRequest(`/parent/children/${selectedId}/messages`);
       else if (section === 'reports') payload = await apiRequest(`/parent/children/${selectedId}/reports`);
@@ -359,6 +373,21 @@ export default function ParentPortal() {
     }
   };
 
+  const submitApplication = async () => {
+    if (!selectedId || !applicationDraft.formId) {
+      notifyAction('Choose an application form before submitting.', 'error');
+      return;
+    }
+    try {
+      await apiRequest(`/parent/children/${selectedId}/applications/submit`, { method: 'POST', body: JSON.stringify({ formId: applicationDraft.formId, answers: { notes: applicationDraft.notes } }) });
+      notifyAction('Application submitted successfully.', 'success');
+      setApplicationDraft({ formId: '', notes: '' });
+      await refreshActive();
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not submit the application.', 'error');
+    }
+  };
+
   const replyToThread = async (threadId: string) => {
     if (!selectedId) return;
     const message = replyDrafts[threadId];
@@ -487,6 +516,22 @@ export default function ParentPortal() {
 
     if (active === 'homework') {
       return <SimpleItems items={context?.homework || []} empty="No homework is available for this learner." />;
+    }
+
+    if (active === 'timetable') {
+      return <ScheduleItems items={context?.timetable || []} empty="No timetable periods are available for this learner." />;
+    }
+
+    if (active === 'resources') {
+      return <ResourceItems items={context?.resources || []} empty="No learning resources are available for this learner." />;
+    }
+
+    if (active === 'calendar') {
+      return <ScheduleItems items={context?.calendar || []} empty="No school calendar events are available." />;
+    }
+
+    if (active === 'assessments') {
+      return <SimpleItems items={context?.assessments || []} empty="No assessments are available for this learner." />;
     }
 
     if (active === 'announcements') {
@@ -679,7 +724,9 @@ export default function ParentPortal() {
     }
 
     if (active === 'applications') {
-      return <SimpleItems items={Array.isArray(moduleData) ? moduleData : []} empty="No applications are linked to this learner or parent account." />;
+      const applications = Array.isArray(moduleData?.items) ? moduleData.items : [];
+      const forms = Array.isArray(moduleData?.forms) ? moduleData.forms : [];
+      return <div className="space-y-5"><SectionCard title="Submit an application"><div className="space-y-3"><Field label="Application form"><select className={inputClass} value={applicationDraft.formId} onChange={(event) => setApplicationDraft({ ...applicationDraft, formId: event.target.value })}><option value="">Select an open form</option>{forms.map((form: any) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></Field><Field label="Notes"><textarea className={inputClass} rows={4} value={applicationDraft.notes} onChange={(event) => setApplicationDraft({ ...applicationDraft, notes: event.target.value })} placeholder="Add any relevant information for the admissions team" /></Field><button onClick={() => void submitApplication()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Submit application</button></div></SectionCard><SectionCard title="Application history"><SimpleItems items={applications} empty="No applications are linked to this learner or parent account." /></SectionCard></div>;
     }
 
     if (active === 'hostel') {
@@ -875,15 +922,15 @@ export default function ParentPortal() {
     if (active === 'store') {
       return (
         <div className="space-y-4">
-          <Banner text="Open the full school store experience to place new orders and manage your cart." tone="blue" />
+          <Banner text="Browse the public school website uniform storefront, then sign in to complete your order and manage your cart." tone="blue" />
           <button
             onClick={() => {
-              navigate('/store');
+              navigate('/school-website/store');
               closeModule();
             }}
             className="inline-flex rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
-            Open school store
+            Open uniform storefront
           </button>
         </div>
       );
@@ -1294,6 +1341,16 @@ function SimpleItems({ items, empty }: { items: any[]; empty: string }) {
       ))}
     </div>
   );
+}
+
+function ScheduleItems({ items, empty }: { items: any[]; empty: string }) {
+  if (!items?.length) return <EmptyState text={empty} />;
+  return <div className="space-y-3">{items.map((item: any, index: number) => <div key={item.id || index} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap justify-between gap-3"><b className="text-sm text-slate-900">{item.title || item.subject || item.type || 'School event'}</b><span className="text-xs text-slate-500">{item.day ? `${item.day} · ${item.startsAt}–${item.endsAt}` : item.startsAt ? new Date(item.startsAt).toLocaleString() : 'Scheduled'}</span></div><p className="mt-2 text-sm text-slate-600">{item.className || item.notes || item.location || ''}</p></div>)}</div>;
+}
+
+function ResourceItems({ items, empty }: { items: any[]; empty: string }) {
+  if (!items?.length) return <EmptyState text={empty} />;
+  return <div className="space-y-3">{items.map((item: any, index: number) => <a key={item.id || index} href={item.url} target="_blank" rel="noreferrer" className="block rounded-2xl border border-slate-200 p-4 hover:border-blue-300"><p className="text-sm font-semibold text-slate-900">{item.title}</p><p className="mt-1 text-xs text-slate-500">{item.category || 'Learning resource'}</p><p className="mt-2 truncate text-sm text-blue-600">Open resource</p></a>)}</div>;
 }
 
 function PaymentList({ items }: { items: any[] }) {

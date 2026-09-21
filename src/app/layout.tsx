@@ -14,13 +14,15 @@ export const metadata: Metadata = {
     title: "School Operations"
   },
   icons: {
+    icon: "/api/pwa/icon?size=64",
+    shortcut: "/api/pwa/icon?size=64",
     apple: "/api/pwa/icon?size=180"
   }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

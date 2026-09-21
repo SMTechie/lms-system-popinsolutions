@@ -49,3 +49,7 @@ export function getPermissionsForRole(role: string) {
 export function getPermissionsForUser(user: Pick<User, "role">) {
   return getPermissionsForRole(user.role);
 }
+
+export function hasPermission(user: Pick<User, "role">, permission: string) {
+  return getPermissionsForUser(user).includes(permission as never);
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRightLeft, CheckCircle2, Clock3, CreditCard, FileSpreadsheet, Plus, ShieldCheck, Wallet, XCircle } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Clock3, CreditCard, FileSpreadsheet, Plus, ShieldCheck, Wallet } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import Modal from '../components/Modal';
 import PortalLoader from '../components/PortalLoader';
