@@ -354,14 +354,15 @@ const permissionCatalog = [
   'requisitions:read', 'requisitions:write',
   'tickets:read', 'tickets:write',
   'store:read', 'store:write', 'uniform_store:store.manage',
-  'students:read',
+  'students:read', 'students:create', 'teachers:create', 'users:manage', 'settings:manage',
+  'communications:read', 'communications:write', 'communications:manage', 'admissions:manage', 'enquiries:read', 'appointments:read', 'appointments:update', 'appointments:manage', 'teacher_portal:read', 'teacher_portal:write',
   'discipline:read', 'discipline:write',
   'parent_portal:read', 'parent_portal:acknowledge',
   'student_portal:read', 'announcements:read', 'attendance:read', 'assessments:read',
 ];
 const defaultRolePermissions: Record<string, string[]> = {
   ADMIN: permissionCatalog,
-  TEACHER: ['operations:read', 'tickets:read', 'tickets:write', 'students:read', 'discipline:read', 'discipline:write'],
+  TEACHER: ['tickets:read', 'tickets:write', 'students:read', 'discipline:read', 'discipline:write', 'communications:read', 'communications:write', 'appointments:read', 'appointments:update', 'teacher_portal:read', 'teacher_portal:write'],
   PARENT: ['parent_portal:read', 'parent_portal:acknowledge', 'store:read', 'tickets:read'],
   STUDENT: ['student_portal:read', 'attendance:read', 'assessments:read'],
 };

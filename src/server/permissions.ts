@@ -11,7 +11,15 @@ const adminPermissions = [
   "tickets:write",
   "store:read",
   "store:write",
-  "uniform_store:store.manage"
+  "uniform_store:store.manage",
+  "students:create",
+  "teachers:create",
+  "users:manage",
+  "settings:manage",
+  "communications:manage",
+  "admissions:manage",
+  "enquiries:read",
+  "appointments:manage"
 ] as const;
 
 export function getPermissionsForRole(role: string) {
@@ -25,12 +33,17 @@ export function getPermissionsForRole(role: string) {
 
   if (role === "TEACHER") {
     return [
-      "operations:read",
       "tickets:read",
       "tickets:write",
       "students:read",
       "discipline:read",
-      "discipline:write"
+      "discipline:write",
+      "communications:read",
+      "communications:write",
+      "appointments:read",
+      "appointments:update",
+      "teacher_portal:read",
+      "teacher_portal:write"
     ];
   }
 

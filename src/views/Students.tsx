@@ -4,6 +4,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
 import { apiRequest } from "../lib/api";
 import { notifyAction } from "../lib/notify";
+import { useAuth } from "../auth/AuthContext";
 
 const emptyStudent = {
   firstName: "",
@@ -39,6 +40,8 @@ const permissionKeys = [
 ];
 
 export default function Students() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [data, setData] = useState<any>({ items: [], grades: [], classes: [], subjects: [] });
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ACTIVE");
@@ -238,24 +241,24 @@ export default function Students() {
               <p className="mt-1 text-sm text-blue-100">Profiles, placements, guardians, admissions history and access control.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/20">
+              {isAdmin && <label className="cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/20">
                 <Upload className="mr-2 inline h-4 w-4" />
                 Import CSV
                 <input type="file" accept=".csv" className="hidden" onChange={(e) => void importCsv(e.target.files?.[0])} />
-              </label>
+              </label>}
               <button onClick={exportCsv} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">
                 <Download className="mr-2 inline h-4 w-4" />
                 Export
               </button>
-              <button onClick={() => setShowAcademic(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">
+              {isAdmin && <button onClick={() => setShowAcademic(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">
                 <GraduationCap className="mr-2 inline h-4 w-4" />
                 Academic Setup
-              </button>
-              <button onClick={() => setShowTeacher(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">
+              </button>}
+              {isAdmin && <button onClick={() => setShowTeacher(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">
                 <UserRound className="mr-2 inline h-4 w-4" />
                 New Teacher
-              </button>
-              <button
+              </button>}
+              {isAdmin && <button
                 onClick={() => {
                   setEditing({ ...emptyStudent });
                   setShowEditor(true);
@@ -264,7 +267,7 @@ export default function Students() {
               >
                 <Plus className="mr-2 inline h-4 w-4" />
                 New Student
-              </button>
+              </button>}
             </div>
           </div>
         </div>

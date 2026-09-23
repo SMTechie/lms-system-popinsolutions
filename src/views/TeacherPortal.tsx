@@ -8,7 +8,6 @@ import {
   GraduationCap,
   Megaphone,
   MessageSquare,
-  PackagePlus,
   Plus,
   RefreshCw,
   ScanText,
@@ -50,7 +49,7 @@ export default function TeacherPortal() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [classes, setClasses] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
-  const [requisitions, setRequisitions] = useState<any[]>([]);
+  const [requisitions] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [assessmentOverview, setAssessmentOverview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -78,11 +77,10 @@ export default function TeacherPortal() {
     setLoading(true);
     setError('');
     try {
-      const [summary, classData, messageData, requisitionData, profileData, appointmentData, assessmentData, resourceData, reportData, calendarData, notificationData, gradebookData] = await Promise.all([
+      const [summary, classData, messageData, profileData, appointmentData, assessmentData, resourceData, reportData, calendarData, notificationData, gradebookData] = await Promise.all([
         apiRequest('/teacher/dashboard'),
         apiRequest<any[]>('/teacher/classes'),
         apiRequest<any[]>('/teacher/messages'),
-        apiRequest<any[]>('/teacher/requisitions'),
         apiRequest('/teacher/profile'),
         apiRequest<any[]>('/teacher/appointments'),
         apiRequest('/teacher/assessments/overview'),
@@ -95,7 +93,6 @@ export default function TeacherPortal() {
       setDashboard(summary && typeof summary === 'object' ? summary : null);
       setClasses(Array.isArray(classData) ? classData : []);
       setMessages(Array.isArray(messageData) ? messageData : []);
-      setRequisitions(Array.isArray(requisitionData) ? requisitionData : []);
       setAppointments(Array.isArray(appointmentData) ? appointmentData : []);
       setAssessmentOverview(assessmentData && typeof assessmentData === 'object' ? assessmentData : null);
       setProfileDraft(profileData && typeof profileData === 'object' ? profileData : null);
@@ -294,7 +291,6 @@ export default function TeacherPortal() {
     { id: 'assessments', label: 'Assessments', icon: GraduationCap },
     { id: 'assistant', label: 'Teacher Assistant', icon: ScanText },
     { id: 'communication', label: 'Parent Communication', icon: MessageSquare },
-    { id: 'requisitions', label: 'Requisitions', icon: PackagePlus },
     { id: 'profile', label: 'My Profile', icon: CheckCircle2 },
   ];
 
@@ -373,7 +369,6 @@ export default function TeacherPortal() {
               <Panel title="Needs attention">
                 <Attention label="Incomplete lesson plans" value={dashboard?.lessonPlansIncomplete?.length || 0} />
                 <Attention label="Parent messages" value={messages.filter((item) => item.status !== 'CLOSED').length} />
-                <Attention label="My requisitions" value={requisitions.filter((item) => !['DELIVERED', 'CLOSED'].includes(item.status)).length} />
                 <Attention label="Appointment requests" value={appointments.filter((item) => item.status === 'REQUESTED').length} />
               </Panel>
             </div>
@@ -400,7 +395,6 @@ export default function TeacherPortal() {
                   <Quick label="Create homework" icon={BookOpen} onClick={() => { setWork((value) => ({ ...value, type: 'HOMEWORK' })); setShowWork(true); }} />
                   <Quick label="Plan a lesson" icon={FileText} onClick={() => { setWork((value) => ({ ...value, type: 'LESSON_PLAN' })); setShowWork(true); }} />
                   <Quick label="Post announcement" icon={Megaphone} onClick={() => { setWork((value) => ({ ...value, type: 'ANNOUNCEMENT' })); setShowWork(true); }} />
-                  <Quick label="Request supplies" icon={PackagePlus} onClick={() => window.location.assign('/requisitions/new')} />
                 </div>
               </Panel>
             </div>

@@ -29,6 +29,7 @@ const StudentPortal = lazy(() => import('./views/StudentPortal'));
 const TeacherPortal = lazy(() => import('./views/TeacherPortal'));
 const Settings = lazy(() => import('./views/Settings'));
 const Admissions = lazy(() => import('./views/Admissions'));
+const Enquiries = lazy(() => import('./views/Enquiries'));
 const ApplicationFormBuilder = lazy(() => import('./views/ApplicationFormBuilder'));
 const ApplicationsPublic = lazy(() => import('./views/ApplicationsPublic'));
 const Tickets = lazy(() => import('./views/Tickets'));
@@ -64,7 +65,9 @@ const App: React.FC = () => {
               <Route path="/applications/new" element={<ApplicationsPublic />} />
               <Route path="/school-website/*" element={<SchoolWebsite />} />
               <Route element={<RequireAuth />}>
-                <Route path="/store" element={<Store />} />
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'PARENT']} />}>
+                  <Route path="/store" element={<Store />} />
+                </Route>
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'PARENT']} />}>
                   <Route path="/parent-portal" element={<ParentPortal />} />
                   <Route path="/parent-portal/payment-callback" element={<ParentPaymentCallback />} />
@@ -73,10 +76,11 @@ const App: React.FC = () => {
                   <Route path="/student-portal" element={<StudentPortal />} />
                 </Route>
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'TEACHER']} />}>
+                  <Route element={<RequireAuth allowedRoles={['ADMIN']} />}>
                   <Route path="/" element={<Home />} />
                   <Route path="/boards" element={<Boards />} />
+                  <Route path="/analytics" element={<Analytics />} />
                   <Route path="/ai-assist" element={<AIAssist />} />
-                  <Route path="/communications" element={<Communications />} />
                   <Route element={<RequireAuth allowedRoles={['ADMIN']} />}>
                     <Route path="/website" element={<WebsiteMaintenance />} />
                   </Route>
@@ -86,16 +90,20 @@ const App: React.FC = () => {
                   <Route path="/requisitions/:id" element={<RequisitionDetail />} />
                   <Route path="/supply-chain" element={<SupplyChain />} />
                   <Route path="/inventory" element={<Inventory />} />
-                  <Route path="/tickets" element={<Tickets />} />
-                  <Route path="/discipline" element={<Discipline />} />
                   <Route path="/admissions" element={<Admissions />} />
-                  <Route path="/students" element={<Students />} />
+                  <Route path="/enquiries" element={<Enquiries />} />
                   <Route path="/hostel" element={<Hostel />} />
                   <Route path="/admissions/form-builder" element={<ApplicationFormBuilder />} />
-                  <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/teacher-portal" element={<TeacherPortal />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/identity-integrations" element={<IdentityIntegrations />} />
+                  </Route>
+                  <Route element={<RequireAuth allowedRoles={['ADMIN', 'TEACHER']} />}>
+                  <Route path="/communications" element={<Communications />} />
+                  <Route path="/tickets" element={<Tickets />} />
+                  <Route path="/discipline" element={<Discipline />} />
+                  <Route path="/students" element={<Students />} />
+                  <Route path="/teacher-portal" element={<TeacherPortal />} />
+                  </Route>
                 </Route>
               </Route>
               <Route path="*" element={<NotFound />} />

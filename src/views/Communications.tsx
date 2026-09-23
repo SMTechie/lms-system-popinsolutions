@@ -5,11 +5,14 @@ import Modal from '../components/Modal';
 import PortalLoader from '../components/PortalLoader';
 import { apiRequest } from '../lib/api';
 import { notifyAction } from '../lib/notify';
+import { useAuth } from '../auth/AuthContext';
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10';
 
 export default function Communications() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [savingProviders, setSavingProviders] = useState(false);
@@ -115,6 +118,17 @@ export default function Communications() {
     ],
     [providerForm],
   );
+  const availableChannels = useMemo(
+    () => providerCards.filter((item) => item.active && item.provider !== 'NONE').map((item) => ({ id: item.id === 'push' ? 'APP' : item.id.toUpperCase(), label: item.id === 'push' ? 'App / Push' : item.label })),
+    [providerCards],
+  );
+
+  useEffect(() => {
+    setCampaign((current) => ({
+      ...current,
+      channels: current.channels.filter((channel) => availableChannels.some((item) => item.id === channel)),
+    }));
+  }, [availableChannels]);
 
   const createCampaign = async () => {
     try {
@@ -355,15 +369,16 @@ export default function Communications() {
                     <h3 className="text-sm font-bold text-slate-950">Channel providers</h3>
                     <p className="mt-1 text-xs text-slate-500">Configure email, SMS, WhatsApp, and app delivery settings for school-wide communication.</p>
                   </div>
-                  <button
+                  {isAdmin && <button
                     onClick={() => void saveProviders()}
                     disabled={savingProviders}
                     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {savingProviders ? 'Saving...' : 'Save providers'}
-                  </button>
+                  </button>}
                 </div>
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <p className="mt-2 text-xs text-slate-500">{isAdmin ? 'Configure providers here. Other users can only select channels marked Live when creating a campaign.' : 'Channels are configured by an administrator. Select from the Live channels when creating a campaign.'}</p>
+                <fieldset disabled={!isAdmin} className="mt-5 grid gap-4 md:grid-cols-2">
                   <ProviderCard
                     title="Email"
                     enabled={providerForm.email?.enabled}
@@ -459,7 +474,7 @@ export default function Communications() {
                       VAPID keys configured
                     </label>
                   </ProviderCard>
-                </div>
+                </fieldset>
 
                 <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-end gap-3">
@@ -468,13 +483,13 @@ export default function Communications() {
                         <input className={inputClass} value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="ops@popin.school" />
                       </Field>
                     </div>
-                    <button
+                    {isAdmin && <button
                       onClick={() => void sendTestEmail()}
                       disabled={!testEmail || testingEmail}
                       className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {testingEmail ? 'Testing...' : 'Send test email'}
-                    </button>
+                    </button>}
                   </div>
                 </div>
               </section>
@@ -550,6 +565,26 @@ export default function Communications() {
               <option value="">Select audience</option>
               {audiences.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
+          </Field>
+          <Field label="Delivery channels">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {availableChannels.map((channel) => (
+                <label key={channel.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={campaign.channels.includes(channel.id)}
+                    onChange={(event) => setCampaign((current) => ({
+                      ...current,
+                      channels: event.target.checked
+                        ? [...current.channels, channel.id]
+                        : current.channels.filter((item) => item !== channel.id),
+                    }))}
+                  />
+                  {channel.label}
+                </label>
+              ))}
+            </div>
+            {!availableChannels.length && <p className="text-xs text-rose-600">No communication providers are configured yet. Ask an administrator to configure a channel in Settings.</p>}
           </Field>
           <Field label="Subject"><input className={inputClass} value={campaign.subject} onChange={(e) => setCampaign((v) => ({ ...v, subject: e.target.value }))} /></Field>
           <Field label="Message"><textarea rows={5} className={inputClass} value={campaign.content} onChange={(e) => setCampaign((v) => ({ ...v, content: e.target.value }))} /></Field>

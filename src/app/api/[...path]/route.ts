@@ -29,6 +29,7 @@ import { initializePaystackTransaction, sendTwilioMessage, verifyPaystackTransac
 import { prisma } from "@/src/server/prisma";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 import { appendAuditLog, getSetting, putSetting } from "@/src/server/settings";
+import { hasPermission } from "@/src/server/permissions";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
@@ -59,7 +60,8 @@ async function handle(request: NextRequest, { params }: RouteContext) {
   const data = await getPortalData();
   const operations = await getOperationsData();
   const publicRoute =
-    path[0] === "applications" && path[1] === "new";
+    (path[0] === "applications" && path[1] === "new") ||
+    (path[0] === "public" && ["appointments", "enquiries", "newsletter"].includes(path[1] || ""));
   const user = publicRoute ? null : await requireCurrentUserFromHeader(request.headers.get("authorization")).catch(() => null);
 
   if (!publicRoute && !user) {
@@ -67,6 +69,7 @@ async function handle(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
+    if (path[0] === "public") return handlePublic(request, method, path, data);
     if (path[0] === "admin") return handleAdmin(request, method, path, data, operations, user);
     if (path[0] === "boards") return handleBoards(request, method, path, data, operations, user);
     if (path[0] === "parent") return handleParent(request, method, path, data, user);
@@ -296,6 +299,24 @@ function defaultPaymentGateways() {
       },
       { provider: "PAYFAST", enabled: false, mode: "test", merchantId: "", publicKey: "", callbackUrl: "" },
     ],
+  };
+}
+
+function getAvailableCommunicationChannels(providers: any) {
+  return [
+    providers?.push?.enabled && providers.push.provider !== "NONE" ? "APP" : null,
+    providers?.email?.enabled && providers.email.provider !== "NONE" ? "EMAIL" : null,
+    providers?.sms?.enabled && providers.sms.provider !== "NONE" ? "SMS" : null,
+    providers?.whatsapp?.enabled && providers.whatsapp.provider !== "NONE" ? "WHATSAPP" : null,
+  ].filter(Boolean) as string[];
+}
+
+function publicCommunicationProviders(providers: any) {
+  return {
+    email: { provider: providers?.email?.provider || "NONE", enabled: Boolean(providers?.email?.enabled), fromAddress: providers?.email?.fromAddress || "" },
+    sms: { provider: providers?.sms?.provider || "NONE", enabled: Boolean(providers?.sms?.enabled), senderId: providers?.sms?.senderId || "", fromNumber: providers?.sms?.fromNumber || "" },
+    whatsapp: { provider: providers?.whatsapp?.provider || "NONE", enabled: Boolean(providers?.whatsapp?.enabled), fromNumber: providers?.whatsapp?.fromNumber || "" },
+    push: { provider: providers?.push?.provider || "PWA", enabled: Boolean(providers?.push?.enabled), vapidConfigured: Boolean(providers?.push?.vapidConfigured) },
   };
 }
 
@@ -635,7 +656,10 @@ function buildAdminAssistantResponse(data: any, prompt: string) {
 }
 
 async function handleAdmin(request: NextRequest, method: string, path: string[], data: any, operations: any, user: any) {
-  ensureRole(user, ["ADMIN", "TEACHER"]);
+  if (path[1] === "communications") ensureRole(user, ["ADMIN", "TEACHER"]);
+  else ensureRole(user, ["ADMIN"]);
+  if (path[1] === "enquiries") ensurePermission(user, "enquiries:read");
+  if (path[1] === "appointments") ensurePermission(user, "appointments:manage");
   const users = await listAdminUsers();
 
   if (!data.activity?.length) data.activity = buildDefaultActivity(data, operations);
@@ -652,6 +676,55 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
 
   if (method === "GET" && path[1] === "notifications") {
     return json(data.notifications);
+  }
+
+  if (method === "GET" && path[1] === "enquiries") {
+    return json({
+      enquiries: data.enquiries || [],
+      appointments: data.parent?.appointments || [],
+      subscribers: data.newsletterSubscribers || [],
+      appointmentSettings: getAppointmentSettings(data),
+    });
+  }
+
+  if (method === "GET" && path[1] === "appointments" && path[2] === "settings") return json(getAppointmentSettings(data));
+  if (method === "PATCH" && path[1] === "appointments" && path[2] === "settings") {
+    const body = await readBody(request);
+    const current = getAppointmentSettings(data);
+    const days = Array.isArray(body.days) ? body.days.map((day: any) => Number(day)).filter((day: number) => day >= 0 && day <= 6) : current.days;
+    const opens = String(body.opens || current.opens);
+    const closes = String(body.closes || current.closes);
+    const durationMinutes = Math.max(15, Math.min(240, Number(body.durationMinutes || current.durationMinutes)));
+    const conflictWindowMinutes = Math.max(0, Math.min(240, Number(body.conflictWindowMinutes ?? current.conflictWindowMinutes)));
+    if (!days.length || !/^([01]\d|2[0-3]):[0-5]\d$/.test(opens) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(closes) || opens >= closes) return json({ error: "Choose valid appointment days and opening hours." }, 400);
+    data.appointmentSettings = { days, opens, closes, durationMinutes, conflictWindowMinutes };
+    await savePortalData(data);
+    return json(data.appointmentSettings);
+  }
+
+  if (method === "PATCH" && path[1] === "enquiries" && path[2]) {
+    const item = (data.enquiries || []).find((entry: any) => entry.id === path[2]);
+    if (!item) return json({ error: "Enquiry not found." }, 404);
+    const body = await readBody(request);
+    const status = String(body.status || "").toUpperCase();
+    if (!["NEW", "IN_PROGRESS", "CONTACTED", "RESOLVED", "ARCHIVED"].includes(status)) return json({ error: "Invalid enquiry status." }, 400);
+    item.status = status;
+    item.updatedAt = new Date().toISOString();
+    await savePortalData(data);
+    return json(item);
+  }
+
+  if (method === "POST" && path[1] === "enquiries" && path[2] && path[3] === "reply") {
+    const item = (data.enquiries || []).find((entry: any) => entry.id === path[2]);
+    if (!item) return json({ error: "Enquiry not found." }, 404);
+    const body = await readBody(request);
+    const message = String(body.message || "").trim();
+    if (!message) return json({ error: "Reply message is required." }, 400);
+    item.replies = [{ id: uid("reply"), message, sentAt: new Date().toISOString(), sentBy: user.email }, ...(item.replies || [])];
+    item.status = "CONTACTED";
+    item.updatedAt = new Date().toISOString();
+    await savePortalData(data);
+    return json(item);
   }
 
   if (method === "POST" && path[1] === "notifications" && path[2] === "read-all") {
@@ -868,12 +941,16 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
         calendar: data.communications.calendar,
         templates: data.communications.templates,
         deliveryLogs: deliveryLogs.slice(0, 120),
-        providers,
+        providers: user?.role === "ADMIN" ? providers : publicCommunicationProviders(providers),
       });
     }
 
     if (method === "POST" && path[2] === "campaigns") {
       const body = await readBody(request);
+      const availableChannels = getAvailableCommunicationChannels(providers);
+      const requestedChannels = Array.isArray(body.channels) ? body.channels : [];
+      const channels = requestedChannels.filter((channel: string) => availableChannels.includes(channel));
+      if (!channels.length) return json({ error: "Select at least one configured communication channel." }, 400);
       const audience = data.communications.audiences.find((item: any) => item.id === body.audienceId) || null;
       const recipients = Number(audience?.memberCount || body.recipientCount || 0);
       const status = body.status || (body.scheduledFor ? "SCHEDULED" : "DRAFT");
@@ -882,7 +959,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
         title: String(body.title || "Untitled campaign").trim(),
         audienceId: body.audienceId || null,
         status,
-        channels: Array.isArray(body.channels) && body.channels.length ? body.channels : ["APP"],
+        channels,
         subject: String(body.subject || "").trim(),
         content: String(body.content || "").trim(),
         scheduledFor: body.scheduledFor || null,
@@ -904,6 +981,10 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
       const body = await readBody(request);
       const campaign = data.communications.campaigns.find((item: any) => item.id === path[3]);
       if (!campaign) return json({ error: "Campaign not found." }, 404);
+      const availableChannels = getAvailableCommunicationChannels(providers);
+      const validChannels = (campaign.channels || []).filter((channel: string) => availableChannels.includes(channel));
+      if (body.status === "SENT" && !validChannels.length) return json({ error: "This campaign has no configured delivery channel available." }, 400);
+      campaign.channels = validChannels;
       Object.assign(campaign, body);
       if (body.status === "SENT" && !campaign.sentAt) {
         await deliverCampaign(data, campaign, user);
@@ -913,6 +994,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     }
 
     if (method === "PUT" && path[2] === "providers") {
+      ensureRole(user, ["ADMIN"]);
       const body = await readBody(request);
       await putSetting("communication-providers", body);
       await appendAuditLog({
@@ -930,6 +1012,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     }
 
     if (method === "POST" && path[2] === "providers" && path[3] === "test-email") {
+      ensureRole(user, ["ADMIN"]);
       const body = await readBody(request);
       if (!body.email) return json({ error: "A destination email address is required." }, 400);
       const message = renderCommunicationCampaignEmail({
@@ -1117,7 +1200,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
 }
 
 async function handleBoards(request: NextRequest, method: string, path: string[], data: any, operations: any, user: any) {
-  ensureRole(user, ["ADMIN", "TEACHER"]);
+  ensureRole(user, ["ADMIN"]);
   if (!data.boards?.length) data.boards = createDefaultBoards(data);
 
   if (method === "GET" && path.length === 1) {
@@ -2064,6 +2147,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     });
   }
   if (method === "GET" && path.join("/") === "teacher/requisitions") {
+    ensureRole(user, ["ADMIN"]);
     return json(
       (operations?.requisitions || []).filter(
         (item: any) =>
@@ -2499,6 +2583,9 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
 
 async function handleStudents(request: NextRequest, method: string, path: string[], data: any, user: any) {
   ensureRole(user, ["ADMIN", "TEACHER"]);
+  if (method === "POST" && ["", "import", "teachers", "grades", "classes", "subjects"].includes(path[1] || "")) {
+    ensureRole(user, ["ADMIN"]);
+  }
   if (method === "GET" && path[1] === "discipline" && path.length === 2) {
     const overview = buildDisciplineOverview(data);
     return json({
@@ -2637,7 +2724,7 @@ async function handleStudents(request: NextRequest, method: string, path: string
 }
 
 async function handleHostel(request: NextRequest, method: string, path: string[], data: any, user: any) {
-  ensureRole(user, ["ADMIN", "TEACHER"]);
+  ensureRole(user, ["ADMIN"]);
   const activeAllocationStatuses = ["RESERVED", "CHECKED_IN"];
   const isBedOccupied = (bedId: string, ignoreAllocationId?: string) =>
     data.hostel.allocations.some(
@@ -2979,7 +3066,8 @@ async function handleHostel(request: NextRequest, method: string, path: string[]
 
 async function handleApplications(request: NextRequest, method: string, path: string[], data: any, user: any) {
   if (path.join("/") !== "applications/new") {
-    ensureRole(user, ["ADMIN", "TEACHER"]);
+    ensureRole(user, ["ADMIN"]);
+    ensurePermission(user, "admissions:manage");
   }
   const forms = data.applications.forms;
   if (method === "GET" && path.join("/") === "applications/forms") return json(forms);
@@ -3013,12 +3101,16 @@ async function handleApplications(request: NextRequest, method: string, path: st
       (form.versions || [])[0] ||
       null;
     const state = form.admissionsOpenState || "open";
+    const now = Date.now();
+    const opensAt = form.opensAt ? new Date(form.opensAt).getTime() : null;
+    const closesAt = form.closesAt ? new Date(form.closesAt).getTime() : null;
+    const admissionsOpen = state !== "closed" && (!opensAt || now >= opensAt) && (!closesAt || now <= closesAt);
     return json({
       id: form.id,
       formId: form.id,
       slug: form.slug,
       name: form.name,
-      admissionsOpen: state !== "closed",
+      admissionsOpen,
       admissionsOpenState: state,
       opensAt: form.opensAt || null,
       closesAt: form.closesAt || null,
@@ -3031,6 +3123,11 @@ async function handleApplications(request: NextRequest, method: string, path: st
   if (method === "POST" && path.join("/") === "applications/new") {
     const body = await readBody(request);
     const form = forms.find((item: any) => item.slug === body.slug) || forms[0];
+    if (!form) return json({ error: "Application form not available." }, 404);
+    const now = Date.now();
+    const opensAt = form.opensAt ? new Date(form.opensAt).getTime() : null;
+    const closesAt = form.closesAt ? new Date(form.closesAt).getTime() : null;
+    if ((form.admissionsOpenState || "open") === "closed" || (opensAt && now < opensAt) || (closesAt && now > closesAt)) return json({ error: form.closedMessage || "Admissions are currently closed." }, 400);
     const submission = { id: uid("submission"), submissionReference: `APP-${String((form.submissions || []).length + 1).padStart(4, "0")}`, status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "website", ...body };
     form.submissions = [submission, ...(form.submissions || [])];
     await savePortalData(data);
@@ -3061,6 +3158,92 @@ async function handleApplications(request: NextRequest, method: string, path: st
   }
 
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
+}
+
+function ensurePermission(user: any, permission: string) {
+  if (!user || !hasPermission(user, permission)) {
+    throw new Error("Unauthorized");
+  }
+}
+
+function getAppointmentSettings(data: any) {
+  return { days: data.appointmentSettings?.days || [1, 2, 3, 4, 5], opens: data.appointmentSettings?.opens || "08:00", closes: data.appointmentSettings?.closes || "16:00", durationMinutes: data.appointmentSettings?.durationMinutes || 30, conflictWindowMinutes: data.appointmentSettings?.conflictWindowMinutes ?? 30 };
+}
+
+async function handlePublic(request: NextRequest, method: string, path: string[], data: any) {
+  if (method === "GET" && path[1] === "appointments") {
+    return json({ businessHours: getAppointmentSettings(data), bookedStartsAt: (data.parent?.appointments || []).filter((item: any) => ["REQUESTED", "CONFIRMED"].includes(item.status)).map((item: any) => item.startsAt) });
+  }
+  if (method !== "POST") return json({ error: "Public form route not found." }, 404);
+  const body = await readBody(request);
+  const name = String(body.name || body.contactName || "").trim();
+  const email = String(body.email || "").trim().toLowerCase();
+  const phone = String(body.phone || "").trim();
+  if (!name || !email) return json({ error: "Name and email are required." }, 400);
+
+  if (path[1] === "appointments") {
+    const startsAt = String(body.startsAt || "").trim();
+    if (!startsAt) return json({ error: "Please select a preferred appointment time." }, 400);
+    const parsed = new Date(startsAt);
+    const settings = getAppointmentSettings(data);
+    const [openHour, openMinute] = settings.opens.split(":").map(Number);
+    const [closeHour, closeMinute] = settings.closes.split(":").map(Number);
+    const minutes = parsed.getHours() * 60 + parsed.getMinutes();
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) return json({ error: "Please choose a future appointment time." }, 400);
+    if (!settings.days.includes(parsed.getDay()) || minutes < openHour * 60 + openMinute || minutes >= closeHour * 60 + closeMinute) return json({ error: `Appointments are available on selected school days, ${settings.opens} to ${settings.closes}.` }, 400);
+    data.parent = data.parent || {};
+    data.parent.appointments = data.parent.appointments || [];
+    if (data.parent.appointments.some((item: any) => ["REQUESTED", "CONFIRMED"].includes(item.status) && item.startsAt && Math.abs(new Date(item.startsAt).getTime() - parsed.getTime()) < settings.conflictWindowMinutes * 60 * 1000)) return json({ error: "That time is already requested. Please choose another time." }, 409);
+    const appointment = {
+      id: uid("public-appointment"),
+      learnerId: null,
+      title: String(body.title || "School enquiry appointment").trim(),
+      teacherName: "Admissions team",
+      teacherEmail: "",
+      parentName: name,
+      parentEmail: email,
+      phone,
+      startsAt,
+      endsAt: String(body.endsAt || "").trim(),
+      location: String(body.location || "School office / online").trim(),
+      notes: String(body.message || body.notes || "").trim(),
+      status: "REQUESTED",
+      createdAt: new Date().toISOString(),
+    };
+    data.parent.appointments.unshift(appointment);
+    data.notifications = [{ id: uid("notification"), type: "appointment", title: "New appointment request", message: `${name} requested an appointment.`, createdAt: new Date().toISOString(), read: false }, ...(data.notifications || [])];
+    await savePortalData(data);
+    return json({ ok: true, appointment }, 201);
+  }
+
+  if (path[1] === "enquiries") {
+    data.enquiries = data.enquiries || [];
+    const enquiry = {
+      id: uid("enquiry"),
+      name,
+      email,
+      phone,
+      subject: String(body.subject || "Website enquiry").trim(),
+      message: String(body.message || "").trim(),
+      status: "NEW",
+      createdAt: new Date().toISOString(),
+    };
+    if (!enquiry.message) return json({ error: "Please enter a message." }, 400);
+    data.enquiries.unshift(enquiry);
+    data.notifications = [{ id: uid("notification"), type: "enquiry", title: "New website enquiry", message: `${name} sent a new enquiry.`, createdAt: new Date().toISOString(), read: false }, ...(data.notifications || [])];
+    await savePortalData(data);
+    return json({ ok: true, enquiry }, 201);
+  }
+
+  if (path[1] === "newsletter") {
+    data.newsletterSubscribers = data.newsletterSubscribers || [];
+    if (data.newsletterSubscribers.some((item: any) => item.email === email)) return json({ ok: true, alreadySubscribed: true });
+    data.newsletterSubscribers.unshift({ id: uid("subscriber"), name, email, subscribedAt: new Date().toISOString(), status: "ACTIVE" });
+    await savePortalData(data);
+    return json({ ok: true }, 201);
+  }
+
+  return json({ error: "Public form route not found." }, 404);
 }
 
 async function handleIdentity(request: NextRequest, method: string, path: string[], data: any, currentUser: any) {

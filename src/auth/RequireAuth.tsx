@@ -24,7 +24,7 @@ export default function RequireAuth({ allowedRoles }: { allowedRoles?: string[] 
   if (allowedRoles?.length && user && !allowedRoles.includes(user.role)) {
     return (
       <Navigate
-        to={user.role === "PARENT" ? "/parent-portal" : user.role === "STUDENT" ? "/student-portal" : "/"}
+        to={user.role === "PARENT" ? "/parent-portal" : user.role === "STUDENT" ? "/student-portal" : user.role === "TEACHER" ? "/teacher-portal" : "/"}
         replace
       />
     );
