@@ -44,6 +44,7 @@ const sections: readonly SectionDefinition[] = [
   { key: 'discipline', label: 'Disciplinary', icon: Gavel },
   { key: 'announcements', label: 'Announcements', icon: MessageSquare, permission: 'receiveAnnouncements' },
   { key: 'fees', label: 'School Fees', icon: BadgeCheck, permission: 'viewFees' },
+  { key: 'statement', label: 'Learner Statement', icon: Receipt, permission: 'viewFees' },
   { key: 'applications', label: 'Applications', icon: FileText, permission: 'submitApplications' },
   { key: 'hostel', label: 'Hostel', icon: BedDouble, permission: 'viewHostel' },
   { key: 'appointments', label: 'Appointments', icon: CalendarDays, permission: 'bookAppointments' },
@@ -68,6 +69,7 @@ const learnerRequiredSections = new Set<SectionKey>([
   'discipline',
   'announcements',
   'fees',
+  'statement',
   'applications',
   'hostel',
   'appointments',
@@ -140,8 +142,12 @@ export default function ParentPortal() {
     apiRequest<any[]>('/parent/children')
       .then((items) => {
         const list = Array.isArray(items) ? items : [];
-        setChildren(list);
-        setSelectedId(list[0]?.learner?.id || '');
+        const uniqueLearners = list.filter((item, index) => {
+          const learnerId = item?.learner?.id;
+          return learnerId && list.findIndex((candidate) => candidate?.learner?.id === learnerId) === index;
+        });
+        setChildren(uniqueLearners);
+        setSelectedId(uniqueLearners[0]?.learner?.id || '');
       })
       .catch((error) => notifyAction(error.message, 'error'))
       .finally(() => setLoadingChildren(false));
@@ -168,6 +174,7 @@ export default function ParentPortal() {
         if (active === 'attendance') payload = await apiRequest(`/parent/children/${selectedId}/attendance`);
         else if (active === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
         else if (active === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
+        else if (active === 'statement') payload = await apiRequest(`/parent/children/${selectedId}/statement`);
         else if (active === 'applications') {
           const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
           payload = { items, forms };
@@ -223,6 +230,7 @@ export default function ParentPortal() {
       if (section === 'attendance') payload = await apiRequest(`/parent/children/${selectedId}/attendance`);
       else if (section === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
       else if (section === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
+      else if (section === 'statement') payload = await apiRequest(`/parent/children/${selectedId}/statement`);
       else if (section === 'applications') {
         const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
         payload = { items, forms };
@@ -518,7 +526,7 @@ export default function ParentPortal() {
     }
 
     if (active === 'homework') {
-      return <SimpleItems items={context?.homework || []} empty="No homework is available for this learner." />;
+      return <HomeworkItems items={context?.homework || []} />;
     }
 
     if (active === 'timetable') {
@@ -596,6 +604,27 @@ export default function ParentPortal() {
           ) : (
             <EmptyState text="No attendance history is available yet." />
           )}
+        </div>
+      );
+    }
+
+    if (active === 'statement') {
+      const summary = moduleData?.summary || { total: 0, paid: 0, outstanding: 0 };
+      const items = Array.isArray(moduleData?.items) ? moduleData.items : [];
+      const payments = Array.isArray(moduleData?.payments) ? moduleData.payments : [];
+      return (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Learner financial statement</p>
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-3"><div><h4 className="text-xl font-bold text-slate-950">{moduleData?.learnerName || selected?.learner?.firstName || 'Learner'}'s account</h4><p className="mt-1 text-sm text-slate-600">A live summary of billed fees, verified payments, and the outstanding balance.</p></div><span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-blue-700 shadow-sm">Balance: R {Number(summary.outstanding || 0).toFixed(2)}</span></div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total billed" value={`R ${Number(summary.total || 0).toFixed(2)}`} /><MetricCard label="Verified payments" value={`R ${Number(summary.paid || 0).toFixed(2)}`} /><MetricCard label="Outstanding" value={`R ${Number(summary.outstanding || 0).toFixed(2)}`} /></div>
+          <SectionCard title="Statement entries">
+            {items.length ? <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Fee item</th><th className="px-4 py-3">Due date</th><th className="px-4 py-3">Billed</th><th className="px-4 py-3">Received</th><th className="px-4 py-3">Balance</th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((item: any) => <tr key={item.id}><td className="px-4 py-3"><p className="font-semibold text-slate-900">{item.term} / {item.category}</p><p className="mt-0.5 text-xs text-slate-500">{item.reference || 'No reference'}</p></td><td className="px-4 py-3 text-slate-600">{item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-ZA') : '—'}</td><td className="px-4 py-3 text-slate-700">R {Number(item.amount || 0).toFixed(2)}</td><td className="px-4 py-3 text-emerald-700">R {Number(item.paidAmount || 0).toFixed(2)}</td><td className="px-4 py-3 font-semibold text-slate-900">R {Math.max(0, Number(item.amount || 0) - Number(item.paidAmount || 0)).toFixed(2)}</td></tr>)}</tbody></table></div> : <EmptyState text="No fee entries are available for this learner." />}
+          </SectionCard>
+          <SectionCard title="Payment activity">
+            {payments.length ? <PaymentList items={payments} /> : <EmptyState text="No payments have been recorded for this learner yet." />}
+          </SectionCard>
         </div>
       );
     }
@@ -898,8 +927,8 @@ export default function ParentPortal() {
       const orders = Array.isArray(moduleData) ? moduleData : [];
       return orders.length ? (
         <div className="space-y-3">
-          {orders.map((order: any) => (
-            <div key={order.id} className="rounded-2xl border border-slate-200 p-4">
+          {orders.map((order: any, index: number) => (
+            <div key={`${order.id}-${index}`} className="rounded-2xl border border-slate-200 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{order.id}</p>
@@ -1138,59 +1167,36 @@ export default function ParentPortal() {
 
   return (
     <DashboardLayout title="Parent Portal">
-      <div className="space-y-6">
-        <section className="rounded-3xl bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_52%,#06b6d4_100%)] p-6 text-white shadow-xl shadow-blue-900/15">
-          <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">
-                {branding?.schoolName || 'POPIN School'}
-              </p>
-              <h2 className="mt-2 text-3xl font-bold">Parent portal</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-                A complete family workspace for homework, attendance, discipline, messages, fees, appointments,
-                reports, notifications, and support.
-              </p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">{branding?.schoolName || 'POPIN School'}</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Family portal</h2>
+              <p className="mt-1 text-sm text-slate-500">Keep up with your learner’s school day in one simple place.</p>
             </div>
-
-            <div className="rounded-3xl bg-white/10 p-5 backdrop-blur">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Selected learner</p>
-              {selected ? (
-                <div className="mt-3 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15">
-                      <UserRound />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold">
-                        {selected.learner.firstName} {selected.learner.lastName}
-                      </p>
-                      <p className="text-sm text-blue-100">
-                        {selected.learner.studentNumber} / {selected.permissions.relationshipType}
-                      </p>
-                    </div>
-                  </div>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                      {children.length > 1 ? 'Switch learner' : 'Linked learner'}
-                    </span>
-                    <select
-                      className="w-full rounded-2xl border border-white/15 bg-slate-950/20 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-white/30"
-                      value={selectedId}
-                      onChange={(event) => setSelectedId(event.target.value)}
-                    >
-                      {children.map(({ learner }: any) => (
-                        <option key={learner.id} value={learner.id} className="text-slate-900">
-                          {learner.firstName} {learner.lastName} / {learner.studentNumber}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+            {selected ? (
+              <div className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 sm:min-w-[19rem]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                  <UserRound className="h-5 w-5" />
                 </div>
-              ) : (
-                <p className="mt-3 text-sm text-blue-100">No learner linked yet.</p>
-              )}
-            </div>
+                <label className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">{children.length > 1 ? 'Viewing learner' : 'Your learner'}</span>
+                  <select
+                    className="mt-0.5 w-full truncate bg-transparent text-sm font-semibold text-slate-900 outline-none"
+                    value={selectedId}
+                    onChange={(event) => setSelectedId(event.target.value)}
+                    aria-label="Select learner"
+                  >
+                    {children.map(({ learner }: any) => (
+                      <option key={learner.id} value={learner.id}>
+                        {learner.firstName} {learner.lastName} · {learner.studentNumber}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -1207,54 +1213,41 @@ export default function ParentPortal() {
         {loadingChildren && <PortalLoader label="Loading your family portal..." />}
 
         {!loadingChildren && !!children.length && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Portal modules</p>
-              <h3 className="mt-1 text-xl font-bold text-slate-950">Choose an area</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Open the area you want to manage for the currently selected learner. Cards automatically respect the
-                permissions linked to this guardian relationship.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {visibleSections.map(({ key, label, icon: Icon }) => {
-                const selectedSection = active === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setActive(key)}
-                    className={`rounded-2xl border p-4 text-left shadow-sm transition ${
-                      selectedSection
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
-                          selectedSection ? 'bg-white/15 text-white' : 'bg-blue-50 text-blue-600'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                          selectedSection ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        Open
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm font-semibold">{label}</p>
-                    <p className={`mt-1 text-xs ${selectedSection ? 'text-blue-100' : 'text-slate-500'}`}>
-                      {selectedSection ? 'Module open' : `Open ${label.toLowerCase()} for this learner.`}
-                    </p>
+          <>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-slate-950">Common tasks</h3>
+                  <p className="mt-1 text-sm text-slate-500">The things families use most often.</p>
+                </div>
+                {selected && <span className="hidden rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 sm:inline">{selected.permissions.relationshipType}</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {visibleSections.filter((section) => ['homework', 'fees', 'messages', 'reports'].includes(section.key)).map(({ key, label, icon: Icon }) => (
+                  <button key={key} onClick={() => setActive(key)} className="flex min-h-24 flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <Icon className="h-5 w-5 text-blue-600" />
+                    <span className="text-sm font-semibold text-slate-800">{label}</span>
                   </button>
-                );
-              })}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <h3 className="font-bold text-slate-950">All services</h3>
+                <p className="mt-1 text-sm text-slate-500">Choose a service to view or manage information for {selected?.learner?.firstName || 'your learner'}.</p>
+              </div>
+              <div className="grid gap-x-6 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
+                {visibleSections.map(({ key, label, icon: Icon }) => (
+                  <button key={key} onClick={() => setActive(key)} className="flex items-center gap-3 py-3 text-left transition first:pt-0 hover:text-blue-700 sm:[&:nth-child(2)]:pt-0 lg:[&:nth-child(3)]:pt-0">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><Icon className="h-4 w-4" /></span>
+                    <span className="min-w-0 flex-1 text-sm font-medium text-slate-700">{label}</span>
+                    <span className="text-slate-300">›</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </>
         )}
       </div>
 
@@ -1315,6 +1308,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EmptyState({ text }: { text: string }) {
   return <p className="py-8 text-center text-sm text-slate-500">{text}</p>;
+}
+
+function isHomeworkPastDue(item: any) {
+  if (!item?.dueAt) return false;
+  const dueAt = String(item.dueAt);
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dueAt)) due.setHours(23, 59, 59, 999);
+  return due.getTime() < Date.now();
+}
+
+function HomeworkItems({ items }: { items: any[] }) {
+  const homework = Array.isArray(items) ? items : [];
+  const current = homework.filter((item) => !isHomeworkPastDue(item));
+  const past = homework.filter(isHomeworkPastDue);
+  if (!homework.length) return <EmptyState text="No homework has been published for this learner." />;
+  const group = (title: string, records: any[], empty: string, pastItems = false) => <section><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-900">{title}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{records.length}</span></div>{records.length ? <div className="space-y-3">{records.map((item: any, index: number) => <div key={`${item.id || 'homework'}-${index}`} className={`rounded-2xl border p-4 ${pastItems ? 'border-slate-200 bg-slate-50/70' : 'border-blue-100 bg-white'}`}><div className="flex flex-wrap justify-between gap-3"><b className="text-sm text-slate-900">{item.title || 'Homework'}</b><span className={`text-xs font-semibold ${pastItems ? 'text-slate-500' : 'text-blue-700'}`}>{item.dueAt ? `${pastItems ? 'Due' : 'Due'} ${new Date(item.dueAt).toLocaleDateString()}` : 'No due date'}</span></div><p className="mt-2 text-sm text-slate-600">{item.instructions || 'No instructions provided.'}</p>{pastItems && <p className="mt-3 text-xs font-medium text-slate-500">Moved to past homework</p>}</div>)}</div> : <EmptyState text={empty} />}</section>;
+  return <div className="space-y-6">{group('Current homework', current, 'No current homework.')} {group('Past homework', past, 'No past homework yet.', true)}</div>;
 }
 
 function SimpleItems({ items, empty }: { items: any[]; empty: string }) {

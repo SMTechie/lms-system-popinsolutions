@@ -20,7 +20,11 @@ const transactions = new AsyncLocalStorage<Prisma.TransactionClient>();
 export const inTransaction = () => Boolean(transactions.getStore());
 export async function withReadSnapshot<T>(action: () => Promise<T>) {
   if (transactions.getStore()) return action();
-  return client.$transaction(tx => transactions.run(tx, action), { isolationLevel: "RepeatableRead", timeout: 15000 });
+  // PostgreSQL already gives each individual read statement a consistent view.
+  // Wrapping every dashboard read in an explicit transaction caused concurrent
+  // page requests to exhaust Prisma's transaction queue and intermittently fail
+  // with P2028 before a query could run.
+  return action();
 }
 export const prisma = new Proxy(client, {
   get(target, property) {

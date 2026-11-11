@@ -18,6 +18,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import DashboardCard from '../components/DashboardCard';
 import ChartWidget from '../components/ChartWidget';
 import ActivityFeed from '../components/ActivityFeed';
+import Modal from '../components/Modal';
 import PortalLoader from '../components/PortalLoader';
 import { apiRequest } from '../lib/api';
 import { notifyAction } from '../lib/notify';
@@ -52,6 +53,10 @@ export default function Home() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState('');
+  const [officePaymentOpen, setOfficePaymentOpen] = useState(false);
+  const [officeFees, setOfficeFees] = useState<any[]>([]);
+  const [officePaymentSaving, setOfficePaymentSaving] = useState(false);
+  const [officePayment, setOfficePayment] = useState({ feeId: '', amount: '', method: 'CASH', reference: '', paidAt: new Date().toISOString().slice(0, 16) });
 
   const load = async () => {
     setLoading(true);
@@ -85,6 +90,31 @@ export default function Home() {
       notifyAction(error.message || 'Action failed.', 'error');
     } finally {
       setBusyKey('');
+    }
+  };
+
+  const openOfficePayment = async () => {
+    try {
+      const fees = await apiRequest<any[]>('/admin/finance/fees');
+      setOfficeFees(Array.isArray(fees) ? fees : []);
+      setOfficePayment((current) => ({ ...current, feeId: '', amount: '', reference: '', paidAt: new Date().toISOString().slice(0, 16) }));
+      setOfficePaymentOpen(true);
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not load outstanding fees.', 'error');
+    }
+  };
+
+  const submitOfficePayment = async () => {
+    setOfficePaymentSaving(true);
+    try {
+      await apiRequest('/admin/finance/payments', { method: 'POST', body: JSON.stringify({ ...officePayment, amount: Number(officePayment.amount) }) });
+      setOfficePaymentOpen(false);
+      notifyAction('Office payment recorded and sent for verification.', 'success');
+      await load();
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not record office payment.', 'error');
+    } finally {
+      setOfficePaymentSaving(false);
     }
   };
 
@@ -241,6 +271,9 @@ export default function Home() {
           </ActionPanel>
 
           <ActionPanel title="Finance Verification" icon={DollarSign}>
+            <button onClick={() => void openOfficePayment()} className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+              + Record office payment
+            </button>
             {financeQueue.length ? (
               financeQueue.map((item: any) => (
                 <QueueRow
@@ -469,6 +502,24 @@ export default function Home() {
           <ActivityFeed items={activity} />
         </div>
       </div>
+      <Modal title="Record office payment" isOpen={officePaymentOpen} onClose={() => setOfficePaymentOpen(false)}>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800">Use this for a cash, EFT, or card payment received by school staff. The payment is recorded as pending and must still be verified before the fee balance changes.</div>
+          <label className="block text-sm font-semibold text-slate-700">Learner fee
+            <select className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={officePayment.feeId} onChange={(event) => { const fee = officeFees.find((item) => item.id === event.target.value); setOfficePayment((current) => ({ ...current, feeId: event.target.value, amount: fee?.outstanding ? String(fee.outstanding) : current.amount })); }}>
+              <option value="">Select an outstanding fee</option>
+              {officeFees.map((fee) => <option key={fee.id} value={fee.id}>{fee.learnerName} · {fee.studentNumber} · {fee.term} {fee.category} · R {Number(fee.outstanding).toFixed(2)}</option>)}
+            </select>
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-semibold text-slate-700">Amount (R)<input type="number" min="0.01" step="0.01" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={officePayment.amount} onChange={(event) => setOfficePayment((current) => ({ ...current, amount: event.target.value }))} /></label>
+            <label className="block text-sm font-semibold text-slate-700">Method<select className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={officePayment.method} onChange={(event) => setOfficePayment((current) => ({ ...current, method: event.target.value }))}><option value="CASH">Cash</option><option value="EFT">EFT</option><option value="CARD">Card</option></select></label>
+          </div>
+          <label className="block text-sm font-semibold text-slate-700">Receipt or payment reference<input maxLength={100} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={officePayment.reference} onChange={(event) => setOfficePayment((current) => ({ ...current, reference: event.target.value }))} placeholder={officePayment.method === 'CASH' ? 'Cash receipt number' : 'Bank or card reference'} /></label>
+          <label className="block text-sm font-semibold text-slate-700">Payment received at<input type="datetime-local" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={officePayment.paidAt} onChange={(event) => setOfficePayment((current) => ({ ...current, paidAt: event.target.value }))} /></label>
+          <button disabled={officePaymentSaving || !officePayment.feeId || !officePayment.amount || !officePayment.reference.trim()} onClick={() => void submitOfficePayment()} className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{officePaymentSaving ? 'Recording payment...' : 'Record payment for verification'}</button>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }

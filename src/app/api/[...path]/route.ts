@@ -284,6 +284,20 @@ function ensureCommunicationsData(data: any) {
       memberCount: 0,
     });
   }
+  // Support records created by the earlier single-channel campaign model.
+  // This keeps existing school data compatible with the current UI and delivery flow.
+  for (const campaign of data.communications.campaigns) {
+    campaign.title = campaign.title || campaign.name || "Untitled campaign";
+    campaign.channels = Array.isArray(campaign.channels) ? campaign.channels : campaign.channel ? [campaign.channel] : ["APP"];
+    campaign.audienceId = campaign.audienceId || "audience-all-families";
+    campaign.scheduledFor = campaign.scheduledFor || campaign.scheduledAt || null;
+    campaign.metrics = campaign.metrics || {
+      recipients: Number(campaign.deliveryCount || 0),
+      delivered: Number(campaign.deliveredCount || 0),
+      opened: Number(campaign.openedCount || 0),
+      failed: Number(campaign.failedCount || 0),
+    };
+  }
 }
 
 function defaultCommunicationProviders() {
@@ -865,14 +879,21 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
         String(b.startDate || "").localeCompare(String(a.startDate || "")),
       );
       const fees = data.parent.fees || [];
+      const overdueFees = fees.filter((item: any) => {
+        if (!item.dueDate || Number(item.amount || 0) <= Number(item.paidAmount || 0)) return false;
+        const due = new Date(`${String(item.dueDate).slice(0, 10)}T23:59:59.999`);
+        return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+      });
       return json({
         summary: {
           outstanding: fees.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
+          overdue: overdueFees.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
           collected: payments.filter((item: any) => item.status === "VERIFIED").reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0),
           pendingVerification: payments.filter((item: any) => item.status === "PENDING_VERIFICATION").length,
           rejected: payments.filter((item: any) => item.status === "REJECTED").length,
           activePlans: plans.filter((item: any) => item.status === "ACTIVE").length,
         },
+        overdueFees: overdueFees.map((item: any) => ({ ...item, learnerName: learnerName(data, item.learnerId), outstanding: Number(item.amount || 0) - Number(item.paidAmount || 0) })),
         payments: payments.map((item: any) => ({
           ...item,
           learnerName: learnerName(data, item.learnerId),
@@ -1195,6 +1216,58 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     return json(requisition);
   }
 
+  if (method === "GET" && path[1] === "finance" && path[2] === "fees") {
+    const learnerId = request.nextUrl.searchParams.get("learnerId") || "";
+    return json((data.parent?.fees || [])
+      .map((fee: any) => ({
+        ...fee,
+        learnerName: learnerName(data, fee.learnerId),
+        studentNumber: data.learners.find((learner: any) => learner.id === fee.learnerId)?.studentNumber || "",
+        outstanding: Math.max(0, Number(fee.amount || 0) - Number(fee.paidAmount || 0)),
+      }))
+      .filter((fee: any) => fee.outstanding > 0 && (!learnerId || fee.learnerId === learnerId))
+      .sort((a: any, b: any) => String(a.learnerName).localeCompare(String(b.learnerName))));
+  }
+
+  if (method === "GET" && path[1] === "finance" && path[2] === "learners") {
+    const search = String(request.nextUrl.searchParams.get("search") || "").trim().toLowerCase();
+    return json((data.learners || [])
+      .filter((learner: any) => learner.status === "ACTIVE" && `${learner.firstName || ""} ${learner.lastName || ""} ${learner.studentNumber || ""}`.toLowerCase().includes(search))
+      .slice(0, 20)
+      .map((learner: any) => ({ id: learner.id, name: `${learner.firstName || ""} ${learner.lastName || ""}`.trim(), studentNumber: learner.studentNumber || "", gradeId: learner.gradeId || "" })));
+  }
+
+  if (method === "POST" && path[1] === "finance" && path[2] === "payments" && path.length === 3) {
+    const body = await readBody(request);
+    const learner = (data.learners || []).find((item: any) => item.id === String(body.learnerId || "") && item.status === "ACTIVE");
+    const paymentType = String(body.paymentType || "SCHOOL_FEES").toUpperCase();
+    const fee = (data.parent?.fees || []).find((item: any) => item.id === String(body.feeId || "") && item.learnerId === learner?.id);
+    const amount = Number(body.amount);
+    const methodName = String(body.method || "").toUpperCase();
+    const reference = String(body.reference || "").trim();
+    const paidAt = new Date(String(body.paidAt || ""));
+    if (!learner) return json({ error: "Select an active learner." }, 400);
+    if (!["SCHOOL_FEES", "TRANSPORT", "HOSTEL", "UNIFORM", "ACTIVITY", "OTHER"].includes(paymentType)) return json({ error: "Choose a valid payment type." }, 400);
+    if (paymentType === "SCHOOL_FEES" && !fee) return json({ error: "Select a valid outstanding fee for this learner." }, 400);
+    if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Enter a payment amount greater than zero." }, 400);
+    const outstanding = fee ? Math.max(0, Number(fee.amount || 0) - Number(fee.paidAmount || 0)) : null;
+    if (outstanding !== null && amount > outstanding) return json({ error: `Payment cannot exceed the outstanding balance of R ${outstanding.toFixed(2)}.` }, 400);
+    if (!["CASH", "EFT", "CARD"].includes(methodName)) return json({ error: "Choose Cash, EFT, or Card as the payment method." }, 400);
+    if (reference.length < 2 || reference.length > 100) return json({ error: "Enter a receipt number or payment reference." }, 400);
+    if (Number.isNaN(paidAt.getTime()) || paidAt.getTime() > Date.now() + 60000) return json({ error: "Enter a valid payment date and time." }, 400);
+    const payment = {
+      id: uid("payment"), learnerId: learner.id, feeId: fee?.id || null, paymentType, amount, method: methodName, reference,
+      paidAt: paidAt.toISOString(), status: "PENDING_VERIFICATION", proofFileName: "", proofDocumentId: "",
+      capturedBy: user.email, captureSource: "OFFICE",
+    };
+    data.parent.payments = [payment, ...(data.parent.payments || [])];
+    data.parent.notifications = data.parent.notifications || [];
+    data.parent.notifications.unshift({ id: uid("parent-notification"), learnerId: learner.id, type: "finance", title: "Office payment recorded", message: `A ${methodName} ${paymentType.toLowerCase().replace(/_/g, " ")} payment of R ${amount.toFixed(2)} was recorded by the school and is awaiting verification.`, createdAt: new Date().toISOString(), readAt: null });
+    await savePortalData(data);
+    await appendAuditLog({ action: "admin.payment.capture", entity: "payment", entityId: payment.id, actorId: user.id, metadata: { learnerId: learner.id, feeId: fee?.id || null, paymentType, amount, method: methodName, reference } });
+    return json(payment, 201);
+  }
+
   if (method === "POST" && path[1] === "finance" && path[2] === "payments" && path[3] && ["verify", "reject"].includes(path[4])) {
     const payment = (data.parent?.payments || []).find((item: any) => item.id === path[3]);
     if (!payment) return json({ error: "Payment not found." }, 404);
@@ -1398,7 +1471,15 @@ async function handleParent(request: NextRequest, method: string, path: string[]
         },
       })),
     );
-    return json(parentEmail ? links.filter((link: any) => link.guardian?.email?.toLowerCase() === parentEmail) : links);
+    const accessibleLinks = parentEmail ? links.filter((link: any) => link.guardian?.email?.toLowerCase() === parentEmail) : links;
+    // A learner should appear once in the parent selector even if legacy data
+    // contains more than one guardian link for the same parent and learner.
+    const seenLearners = new Set<string>();
+    return json(accessibleLinks.filter((link: any) => {
+      if (seenLearners.has(link.learner.id)) return false;
+      seenLearners.add(link.learner.id);
+      return true;
+    }));
   }
 
   const learnerId = path[1] === "children" ? path[2] : undefined;
@@ -1465,6 +1546,26 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     });
     await savePortalData(data);
     return json(record);
+  }
+
+  if (method === "GET" && path[1] === "children" && learnerId && path[3] === "statement") {
+    if (!learnerLink?.viewFees) return json({ error: "Statements are not enabled for this learner." }, 403);
+    const items = (data.parent.fees || [])
+      .filter((item: any) => item.learnerId === learnerId)
+      .sort((a: any, b: any) => String(b.dueDate || "").localeCompare(String(a.dueDate || "")));
+    const payments = (data.parent.payments || [])
+      .filter((item: any) => item.learnerId === learnerId)
+      .sort((a: any, b: any) => String(b.paidAt || b.submittedAt || "").localeCompare(String(a.paidAt || a.submittedAt || "")));
+    return json({
+      learnerName: learnerName(data, learnerId),
+      items,
+      payments,
+      summary: {
+        total: items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0),
+        paid: items.reduce((sum: number, item: any) => sum + Number(item.paidAmount || 0), 0),
+        outstanding: items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.amount || 0) - Number(item.paidAmount || 0)), 0),
+      },
+    });
   }
 
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "fees") {
@@ -2920,11 +3021,21 @@ async function handleStudents(request: NextRequest, method: string, path: string
   }
   if (method === "POST" && path[2] === "guardians") {
     const body = await readBody(request);
-    const link = { id: uid("guardian-link"), status: "VERIFIED", guardian: { id: uid("guardian"), email: body.email, name: body.name }, ...body };
+    const email = String(body.email || "").trim().toLowerCase();
+    const name = String(body.name || "").trim();
+    const relationshipType = String(body.relationshipType || "").trim();
+    const allowedRelationships = ["Mother", "Father", "Guardian", "Grandparent", "Sponsor", "Emergency contact", "Pickup authorised person"];
+    if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) return json({ error: "Enter a valid guardian email address." }, 400);
+    if (name.length < 2 || name.length > 120) return json({ error: "Guardian name must be between 2 and 120 characters." }, 400);
+    if (!allowedRelationships.includes(relationshipType)) return json({ error: "Choose a valid relationship to the learner." }, 400);
+    if ((learner.guardians || []).some((link: any) => String(link.guardian?.email || "").toLowerCase() === email && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status))) return json({ error: "This guardian is already linked to the learner." }, 409);
+    const permissions = Object.fromEntries(["viewFees", "payFees", "viewReports", "viewHomework", "receiveAnnouncements", "messageTeachers", "authorisePickup", "submitApplications", "bookAppointments", "viewHostel", "applyHostel", "viewHostelBilling", "submitHostelConcerns", "viewHostelMovement"].map((key) => [key, body[key] === true]));
+    if (!Object.values(permissions).some(Boolean)) return json({ error: "Select at least one permission for this guardian." }, 400);
+    const link = { id: uid("guardian-link"), status: "VERIFIED", guardian: { id: uid("guardian"), email, name }, relationshipType, isPrimary: body.isPrimary === true, ...permissions };
     learner.guardians = [link, ...(learner.guardians || [])];
     await savePortalData(data);
-    const invite = renderGuardianLinkedEmail(body.name, `${learner.firstName} ${learner.lastName}`, absoluteUrl(request, "/register"));
-    await sendTransactionalEmail({ to: body.email, subject: invite.subject, html: invite.html, text: invite.text });
+    const invite = renderGuardianLinkedEmail(name, `${learner.firstName} ${learner.lastName}`, absoluteUrl(request, "/register"));
+    await sendTransactionalEmail({ to: email, subject: invite.subject, html: invite.html, text: invite.text });
     return json(link, 201);
   }
   if (method === "POST" && path[2] === "move") {

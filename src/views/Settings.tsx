@@ -248,6 +248,12 @@ const pages: Page[] = [
     ],
   },
   {
+    id: 'payment-gateways',
+    label: 'Payment Gateways',
+    description: 'Configure the online payment provider, credentials, currency, callback URL, and gateway availability.',
+    fields: [],
+  },
+  {
     id: 'licensing',
     label: 'Licensing',
     description: 'Plan, seats, storage, expiry, and module entitlement status.',
@@ -578,7 +584,7 @@ export default function Settings() {
               </div>
             )}
 
-            <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            {activeId !== 'payment-gateways' && <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
               <button onClick={() => setExpanded(!expanded)} className="flex w-full items-center justify-between border-b border-gray-100 p-5 text-left">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
@@ -613,7 +619,9 @@ export default function Settings() {
                   {saving ? 'Saving...' : 'Save configuration'}
                 </button>
               </div>
-            </section>
+            </section>}
+
+            {activeId === 'payment-gateways' && <PaymentGatewaySettings />}
 
             {activeId === 'users' && <UsersTable users={users} userSearch={userSearch} setUserSearch={setUserSearch} userRoleFilter={userRoleFilter} setUserRoleFilter={setUserRoleFilter} userStatusFilter={userStatusFilter} setUserStatusFilter={setUserStatusFilter} userPage={userPage} setUserPage={setUserPage} onAddUser={() => setShowAddUser(true)} onReviewRegistration={reviewRegistration} />}
 
@@ -735,6 +743,53 @@ export default function Settings() {
       </div>
     </DashboardLayout>
   );
+}
+
+function PaymentGatewaySettings() {
+  const [gatewayForm, setGatewayForm] = useState<any>({ primary: { provider: 'MANUAL_EFT', enabled: true, mode: 'manual', merchantId: '', publicKey: '', secretKey: '', callbackUrl: '', currency: 'ZAR' }, alternatives: [] });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    apiRequest('/admin/payments')
+      .then((response: any) => setGatewayForm(response?.gateways || gatewayForm))
+      .catch((error: any) => setNotice(error.message || 'Could not load gateway configuration.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const saveGateways = async () => {
+    setSaving(true);
+    setNotice('');
+    try {
+      await apiRequest('/admin/payments/gateways', { method: 'PUT', body: JSON.stringify(gatewayForm) });
+      setNotice('Payment gateway configuration saved.');
+    } catch (error: any) {
+      setNotice(error.message || 'Could not save gateway configuration.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500">Loading payment gateway configuration...</div>;
+  return <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div><h4 className="text-sm font-bold text-slate-950">Gateway configuration</h4><p className="mt-1 text-sm text-slate-500">Set the online payment provider and callback details used for school collections.</p></div>
+      <button onClick={() => void saveGateways()} disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : 'Save gateways'}</button>
+    </div>
+    {notice && <p className={`mt-4 rounded-xl border px-3 py-2 text-sm ${notice.includes('saved') ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>{notice}</p>}
+    <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <label className="text-sm font-semibold text-slate-700">Primary provider<select className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.provider || 'MANUAL_EFT'} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, provider: event.target.value } }))}><option value="MANUAL_EFT">Manual EFT</option><option value="PAYSTACK">Paystack</option><option value="PAYFAST">PayFast</option><option value="YOCO">Yoco</option><option value="OZOW">Ozow</option></select></label>
+      <label className="text-sm font-semibold text-slate-700">Mode<select className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.mode || 'manual'} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, mode: event.target.value } }))}><option value="manual">Manual</option><option value="test">Test</option><option value="live">Live</option></select></label>
+      <label className="text-sm font-semibold text-slate-700">Merchant ID<input className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.merchantId || ''} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, merchantId: event.target.value } }))} /></label>
+      <label className="text-sm font-semibold text-slate-700">Public key<input className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.publicKey || ''} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, publicKey: event.target.value } }))} /></label>
+      <label className="text-sm font-semibold text-slate-700">Secret key<input type="password" className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.secretKey || ''} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, secretKey: event.target.value } }))} /></label>
+      <label className="text-sm font-semibold text-slate-700">Currency<input className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.currency || 'ZAR'} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, currency: event.target.value.toUpperCase() } }))} /></label>
+      <label className="text-sm font-semibold text-slate-700 md:col-span-2">Callback URL<input className={`${inputClass} mt-1.5`} value={gatewayForm.primary?.callbackUrl || ''} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, callbackUrl: event.target.value } }))} /></label>
+      <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700 md:col-span-2"><input type="checkbox" checked={Boolean(gatewayForm.primary?.enabled)} onChange={(event) => setGatewayForm((current: any) => ({ ...current, primary: { ...current.primary, enabled: event.target.checked } }))} className="h-4 w-4 accent-blue-600" />Enable primary gateway</label>
+    </div>
+    {(gatewayForm.alternatives || []).length > 0 && <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Alternative providers</p><div className="mt-3 space-y-2">{gatewayForm.alternatives.map((item: any) => <div key={item.provider} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"><span className="font-semibold text-slate-800">{item.provider} <span className="font-normal text-slate-500">· {item.mode} mode</span></span><span className={`rounded-full px-2 py-1 text-xs font-bold ${item.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{item.enabled ? 'Enabled' : 'Disabled'}</span></div>)}</div></div>}
+  </section>;
 }
 
 function ConfigField({

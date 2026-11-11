@@ -171,8 +171,28 @@ function SimpleList({ items, empty, dateKey }: { items: any[]; empty: string; da
 }
 
 function HomeworkList({ items, submissions, onSubmit }: { items: any[]; submissions: any[]; onSubmit: (item: any) => void }) {
-  if (!items?.length) return <Empty text="No homework has been published yet." />;
-  return <div className="space-y-3">{items.map((item: any) => { const submission = (submissions || []).find((entry: any) => entry.workItemId === item.id); return <div key={item.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm text-slate-900">{item.title}</b><p className="mt-2 text-sm text-slate-600">{item.instructions || 'No instructions provided.'}</p></div><span className="text-xs text-slate-500">{item.dueAt ? `Due ${new Date(item.dueAt).toLocaleDateString()}` : 'No due date'}</span></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-slate-500">{submission ? `Submitted ${new Date(submission.submittedAt).toLocaleString()}` : 'Not submitted'}</span><button onClick={() => onSubmit(item)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white">{submission ? 'Resubmit' : 'Submit work'}</button></div></div>; })}</div>;
+  const homework = Array.isArray(items) ? items : [];
+  if (!homework.length) return <Empty text="No homework has been published yet." />;
+  const isPastDue = (item: any) => {
+    if (!item?.dueAt) return false;
+    const dueAt = String(item.dueAt);
+    const due = new Date(dueAt);
+    if (Number.isNaN(due.getTime())) return false;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dueAt)) due.setHours(23, 59, 59, 999);
+    return due.getTime() < Date.now();
+  };
+  const current = homework.filter((item: any) => !isPastDue(item));
+  const past = homework.filter(isPastDue);
+  const group = (title: string, records: any[], isPast = false) => (
+    <section>
+      <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-900">{title}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{records.length}</span></div>
+      {records.length ? <div className="space-y-3">{records.map((item: any, index: number) => {
+        const submission = (submissions || []).find((entry: any) => entry.workItemId === item.id);
+        return <div key={`${item.id || 'homework'}-${index}`} className={`rounded-2xl border p-4 ${isPast ? 'border-slate-200 bg-slate-50/70' : 'border-blue-100 bg-white'}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm text-slate-900">{item.title}</b><p className="mt-2 text-sm text-slate-600">{item.instructions || 'No instructions provided.'}</p></div><span className="text-xs text-slate-500">{item.dueAt ? `Due ${new Date(item.dueAt).toLocaleDateString()}` : 'No due date'}</span></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-slate-500">{submission ? `Submitted ${new Date(submission.submittedAt).toLocaleString()}` : isPast ? 'Due date passed' : 'Not submitted'}</span>{!isPast && <button onClick={() => onSubmit(item)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white">{submission ? 'Resubmit' : 'Submit work'}</button>}</div></div>;
+      })}</div> : <Empty text={isPast ? 'No past homework yet.' : 'No current homework.'} />}
+    </section>
+  );
+  return <div className="space-y-6">{group('Current homework', current)}{group('Past homework', past, true)}</div>;
 }
 
 function TimetableList({ items }: { items: any[] }) {

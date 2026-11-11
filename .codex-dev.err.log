@@ -1,0 +1,262 @@
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+Error [PrismaClientKnownRequestError]: Transaction API error: Unable to start a transaction in the given time.
+    at async handle (src\app\api\[...path]\route.ts:71:16)
+  69 |   const route = path.join("/");
+  70 |   const method = request.method;
+> 71 |   const data = await getPortalData();
+     |                ^
+  72 |   const operations = await getOperationsData();
+  73 |   if (route === "jobs/run" && method === "POST") {
+  74 |     const configured = process.env.JOBS_SECRET || ""; {
+  code: 'P2028',
+  clientVersion: '5.22.0',
+  meta: [Object]
+}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ Failed to generate static paths for /[...slug]:
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  type: 'SyntaxError'
+}
+ ⨯ Failed to generate static paths for /[...slug]:
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  type: 'SyntaxError'
+}
+ ⨯ ./src/views/Payments.tsx
+Error:   [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\Sibi\Documents\GitHub\popin-LMS\src\views\Payments.tsx[0m:322:1]
+ [2m319[0m |                   </div>
+ [2m320[0m |                 ) : null}
+ [2m321[0m |               </section>
+ [2m322[0m |               </>}
+     : [35;1m                ^[0m
+ [2m323[0m | 
+ [2m324[0m |               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+ [2m324[0m |                 <h3 className="text-sm font-bold text-slate-950">Payment verification log</h3>
+     `----
+  [31mx[0m Expected '</', got '}'
+     ,-[[36;1;4mC:\Users\Sibi\Documents\GitHub\popin-LMS\src\views\Payments.tsx[0m:322:1]
+ [2m319[0m |                   </div>
+ [2m320[0m |                 ) : null}
+ [2m321[0m |               </section>
+ [2m322[0m |               </>}
+     : [35;1m                 ^[0m
+ [2m323[0m | 
+ [2m324[0m |               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+ [2m324[0m |                 <h3 className="text-sm font-bold text-slate-950">Payment verification log</h3>
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/views/Payments.tsx
+./src/App.tsx
+./src/app/spa-shell.tsx
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\DumpStack.log.tmp'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\hiberfil.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\pagefile.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\swapfile.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\DumpStack.log.tmp'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\hiberfil.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\swapfile.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\pagefile.sys'
+ ⨯ ./src/views/Payments.tsx
+Error:   [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\Sibi\Documents\GitHub\popin-LMS\src\views\Payments.tsx[0m:322:1]
+ [2m319[0m |                   </div>
+ [2m320[0m |                 ) : null}
+ [2m321[0m |               </section>
+ [2m322[0m |               </>}
+     : [35;1m                ^[0m
+ [2m323[0m | 
+ [2m324[0m |               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+ [2m324[0m |                 <h3 className="text-sm font-bold text-slate-950">Payment verification log</h3>
+     `----
+  [31mx[0m Expected '</', got '}'
+     ,-[[36;1;4mC:\Users\Sibi\Documents\GitHub\popin-LMS\src\views\Payments.tsx[0m:322:1]
+ [2m319[0m |                   </div>
+ [2m320[0m |                 ) : null}
+ [2m321[0m |               </section>
+ [2m322[0m |               </>}
+     : [35;1m                 ^[0m
+ [2m323[0m | 
+ [2m324[0m |               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+ [2m324[0m |                 <h3 className="text-sm font-bold text-slate-950">Payment verification log</h3>
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/views/Payments.tsx
+./src/App.tsx
+./src/app/spa-shell.tsx
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\DumpStack.log.tmp'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\hiberfil.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\pagefile.sys'
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'C:\swapfile.sys'
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.

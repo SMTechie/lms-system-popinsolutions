@@ -4,11 +4,1122 @@
 
    ▲ Next.js 15.5.19
    - Local:        http://localhost:3000
-   - Network:      http://10.10.20.21:3000
+   - Network:      http://10.10.10.56:3000
    - Environments: .env
 
  ✓ Starting...
- ✓ Ready in 4.4s
- ○ Compiling /api/[...path] ...
- ✓ Compiled /api/[...path] in 4.5s (361 modules)
- GET /api/parent/children/learner-2/overview 401 in 10948ms
+ ✓ Ready in 1672ms
+ ✓ Compiled /middleware in 165ms (115 modules)
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 752ms (369 modules)
+ POST /api/auth/login 200 in 3041ms
+ ✓ Compiled /api/[...path] in 391ms (383 modules)
+ GET /api/admin/dashboard 200 in 975ms
+ GET /api/admin/notifications 200 in 67ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/notifications 200 in 84ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 84ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/dashboard 200 in 84ms
+ GET /api/admin/audit 500 in 2191ms
+ GET /api/admin/users 500 in 2261ms
+ ✓ Compiled /api/auth/logout in 298ms (383 modules)
+ POST /api/auth/logout 200 in 399ms
+ ○ Compiling /[...slug] ...
+ ✓ Compiled /[...slug] in 2.2s (2952 modules)
+ GET /login 200 in 2816ms
+ ○ Compiling /api/pwa/icon ...
+ ✓ Compiled /api/auth/me in 1283ms (2962 modules)
+ GET /api/auth/me 401 in 829ms
+ GET /api/public/branding 200 in 831ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 914ms
+ GET /api/pwa/icon?size=64 200 in 1522ms
+ GET /api/auth/me 401 in 24ms
+ GET /api/public/branding 200 in 31ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 2093ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 42ms
+ ✓ Compiled in 2s (2878 modules)
+ GET /login 200 in 177ms
+ ✓ Compiled /manifest.webmanifest in 463ms (2880 modules)
+ GET /manifest.webmanifest 200 in 585ms
+ ✓ Compiled /api/auth/login in 239ms (1560 modules)
+ POST /api/auth/login 401 in 408ms
+ POST /api/auth/login 200 in 89ms
+ ✓ Compiled /api/[...path] in 218ms (1574 modules)
+ GET /api/admin/dashboard 200 in 367ms
+ GET /api/admin/dashboard 200 in 64ms
+ GET /api/admin/audit 500 in 2404ms
+ GET /api/admin/notifications 500 in 2496ms
+ GET /api/admin/users 500 in 2538ms
+ GET /api/admin/audit 200 in 75ms
+ GET /api/admin/users 500 in 2124ms
+ GET /api/admin/notifications 500 in 2181ms
+ GET /api/admin/notifications 200 in 61ms
+ GET /api/admin/notifications 200 in 92ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/analytics 500 in 2157ms
+ GET /api/admin/analytics 200 in 76ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/dashboard 500 in 2112ms
+ GET /api/admin/audit 500 in 2175ms
+ GET /api/admin/users 500 in 2241ms
+ GET /api/admin/dashboard 200 in 121ms
+ GET /api/admin/audit 500 in 2125ms
+ GET /api/admin/users 500 in 2179ms
+ ✓ Compiled in 667ms (2964 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 767ms (2952 modules)
+ GET / 200 in 895ms
+ ✓ Compiled /api/auth/me in 363ms (1579 modules)
+ ✓ Compiled in 1ms (1583 modules)
+ ✓ Compiled in 0ms (1583 modules)
+ ✓ Compiled in 0ms (1583 modules)
+ GET /manifest.webmanifest 200 in 1091ms
+ GET /api/public/branding 200 in 1303ms
+ GET /api/auth/me 200 in 1309ms
+ GET / 200 in 941ms
+ GET /api/public/branding 200 in 38ms
+ GET /api/auth/me 200 in 62ms
+ GET / 200 in 147ms
+ GET /api/admin/users 200 in 136ms
+ GET /api/admin/users 200 in 54ms
+ GET /api/admin/notifications 200 in 2149ms
+ GET /manifest.webmanifest 200 in 40ms
+ GET /api/admin/audit 200 in 2205ms
+ GET /api/admin/dashboard 200 in 2212ms
+ GET /api/admin/notifications 200 in 98ms
+ GET /api/admin/audit 200 in 88ms
+ GET /api/admin/dashboard 200 in 92ms
+ ✓ Compiled /api/auth/login in 296ms (1585 modules)
+ POST /api/auth/login 200 in 480ms
+ GET / 200 in 166ms
+ GET /manifest.webmanifest 200 in 21ms
+ GET /api/admin/audit 401 in 84ms
+ GET /api/admin/audit 401 in 78ms
+ GET /api/admin/audit 401 in 63ms
+ GET /api/admin/audit 401 in 63ms
+ GET /api/admin/audit 401 in 58ms
+ GET /api/admin/audit 401 in 66ms
+ GET /api/admin/audit 401 in 67ms
+ GET /api/admin/audit 401 in 68ms
+ GET /api/admin/audit 401 in 66ms
+ GET /api/admin/audit 401 in 63ms
+ GET /api/admin/audit 401 in 52ms
+ GET /api/admin/audit 401 in 50ms
+ POST /api/auth/login 200 in 86ms
+ GET /api/admin/audit 200 in 59ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/students?status=ACTIVE&search= 200 in 97ms
+ GET /api/admin/notifications 200 in 100ms
+ GET /api/students?status=ACTIVE&search= 200 in 86ms
+ GET /api/admin/notifications 200 in 148ms
+ GET /api/parent/children 200 in 75ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/parent/children 200 in 77ms
+ GET /api/admin/notifications 200 in 99ms
+ GET /api/parent/children/learner-1/overview 200 in 70ms
+ POST /api/auth/login 200 in 102ms
+ POST /api/auth/login 200 in 101ms
+ GET /api/admin/dashboard 200 in 222ms
+ POST /api/auth/login 200 in 126ms
+ GET /api/admin/dashboard 200 in 149ms
+ GET /api/admin/dashboard 200 in 73ms
+ POST /api/auth/login 200 in 86ms
+ GET /api/admin/dashboard 200 in 62ms
+ POST /api/auth/login 429 in 37ms
+ POST /api/auth/login 429 in 59ms
+ POST /api/auth/login 429 in 60ms
+ POST /api/auth/login 429 in 52ms
+ POST /api/auth/login 429 in 53ms
+ GET /api/parent/children/learner-seeded-2/overview 200 in 73ms
+ GET /api/parent/children/learner-2/overview 200 in 72ms
+ GET /api/parent/orders 200 in 71ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 52ms
+ GET /api/parent/profile 200 in 72ms
+ ✓ Compiled in 940ms (2966 modules)
+ GET /parent-portal 200 in 143ms
+ ✓ Compiled /manifest.webmanifest in 167ms (1577 modules)
+ ✓ Compiled (1583 modules)
+ GET /manifest.webmanifest 200 in 450ms
+ GET /api/public/branding 200 in 453ms
+ GET /api/auth/me 200 in 460ms
+ GET /api/public/branding 200 in 40ms
+ GET /api/auth/me 200 in 98ms
+ GET /api/admin/notifications 200 in 109ms
+ GET /api/parent/children 200 in 114ms
+ GET /api/admin/notifications 200 in 89ms
+ GET /api/parent/children 200 in 89ms
+ GET /api/parent/children/learner-1/overview 200 in 92ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 200 in 158ms
+ GET /manifest.webmanifest 200 in 30ms
+ GET /_next/static/chunks/LayoutGroupContext.mjs.map 200 in 80ms
+ GET /api/admin/notifications 200 in 89ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/payments 200 in 101ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/payments 200 in 77ms
+ GET /api/admin/enquiries 200 in 78ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/admin/enquiries 200 in 74ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/hostel/overview 200 in 103ms
+ GET /api/admin/notifications 200 in 106ms
+ GET /api/hostel/dashboard 200 in 106ms
+ GET /api/hostel/overview 200 in 87ms
+ GET /api/hostel/dashboard 200 in 94ms
+ GET /api/admin/notifications 200 in 99ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/teacher/dashboard 200 in 104ms
+ GET /api/teacher/classes 200 in 110ms
+ GET /api/teacher/assessments/overview 200 in 77ms
+ GET /api/teacher/resources 200 in 82ms
+ GET /api/teacher/reports 200 in 98ms
+ GET /api/teacher/calendar 200 in 79ms
+ GET /api/teacher/notifications 200 in 89ms
+ GET /api/teacher/gradebook 200 in 88ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/teacher/dashboard 200 in 88ms
+ GET /api/teacher/classes 200 in 81ms
+ GET /api/teacher/assessments/overview 200 in 78ms
+ GET /api/teacher/resources 200 in 85ms
+ GET /api/teacher/reports 200 in 85ms
+ GET /api/teacher/calendar 200 in 80ms
+ GET /api/teacher/notifications 200 in 78ms
+ GET /api/teacher/gradebook 200 in 101ms
+ GET /api/teacher/messages 200 in 2137ms
+ GET /api/teacher/profile 200 in 2139ms
+ GET /api/teacher/appointments 200 in 2143ms
+ GET /api/teacher/messages 200 in 79ms
+ GET /api/teacher/profile 200 in 80ms
+ GET /api/teacher/appointments 200 in 76ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/parent/children 200 in 70ms
+ GET /api/admin/notifications 200 in 92ms
+ GET /api/parent/children 200 in 98ms
+ GET /api/parent/children/learner-1/overview 200 in 77ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/student/overview 200 in 99ms
+ GET /api/student/hostel 200 in 155ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/student/overview 200 in 91ms
+ GET /api/student/hostel 200 in 76ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 87ms
+ GET /api/parent/children 200 in 88ms
+ GET /api/admin/notifications 200 in 100ms
+ GET /api/parent/children 200 in 112ms
+ GET /api/parent/children/learner-1/overview 200 in 97ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/notifications 200 in 103ms
+ GET /api/teacher/dashboard 200 in 92ms
+ GET /api/teacher/classes 200 in 100ms
+ GET /api/teacher/assessments/overview 200 in 76ms
+ GET /api/teacher/resources 200 in 110ms
+ GET /api/teacher/reports 200 in 107ms
+ GET /api/teacher/calendar 200 in 82ms
+ GET /api/teacher/notifications 200 in 80ms
+ GET /api/teacher/gradebook 200 in 99ms
+ GET /api/admin/notifications 200 in 106ms
+ GET /api/teacher/dashboard 200 in 111ms
+ GET /api/teacher/classes 200 in 106ms
+ GET /api/teacher/assessments/overview 200 in 77ms
+ GET /api/teacher/resources 200 in 91ms
+ GET /api/teacher/reports 200 in 96ms
+ GET /api/teacher/calendar 200 in 88ms
+ GET /api/teacher/notifications 200 in 95ms
+ GET /api/teacher/gradebook 200 in 64ms
+ GET /api/teacher/profile 200 in 2150ms
+ GET /api/teacher/appointments 200 in 2158ms
+ GET /api/teacher/messages 200 in 2175ms
+ GET /api/teacher/profile 200 in 103ms
+ GET /api/teacher/appointments 200 in 120ms
+ GET /api/teacher/messages 200 in 99ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 81ms
+ GET /api/parent/children 200 in 81ms
+ GET /api/admin/notifications 200 in 88ms
+ GET /api/parent/children 200 in 112ms
+ GET /api/parent/children/learner-1/overview 200 in 90ms
+ ✓ Compiled in 879ms (2966 modules)
+ GET /parent-portal 200 in 136ms
+ ✓ Compiled /manifest.webmanifest in 156ms (1579 modules)
+ GET /manifest.webmanifest 200 in 250ms
+ GET /api/parent/children/learner-1/messages 403 in 112ms
+ GET /api/parent/children/learner-1/reports 403 in 75ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 200 in 200ms
+ GET /_next/static/chunks/LayoutGroupContext.mjs.map 200 in 64ms
+ GET /api/admin/notifications 200 in 65ms
+ GET /api/parent/profile 200 in 71ms
+ GET /api/admin/notifications 200 in 62ms
+ ✓ Compiled /api/auth/me in 296ms (1576 modules)
+ GET /api/auth/me 200 in 574ms
+ GET /api/admin/notifications 200 in 617ms
+ GET /api/auth/me 200 in 53ms
+ ○ Compiling /api/store/catalog ...
+ ✓ Compiled /api/store/catalog in 787ms (2957 modules)
+ GET /api/store/catalog?visibility=internal&includeImages=true&includeVariants=true 200 in 896ms
+ GET /api/admin/notifications 200 in 864ms
+ GET /api/store/catalog?visibility=internal&includeImages=true&includeVariants=true 200 in 47ms
+ ○ Compiling /api/tickets ...
+ ✓ Compiled /api/tickets in 591ms (2959 modules)
+ GET /api/tickets?search= 200 in 682ms
+ GET /api/admin/notifications 200 in 714ms
+ GET /api/tickets?search= 200 in 39ms
+ GET /api/admin/notifications 200 in 70ms
+ GET /api/students/discipline 200 in 87ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/students/discipline 200 in 64ms
+ GET /api/admin/notifications 200 in 101ms
+ GET /api/admin/notifications 200 in 83ms
+ GET /api/admin/communications 200 in 87ms
+ GET /api/admin/notifications 200 in 112ms
+ GET /api/admin/communications 200 in 118ms
+ ○ Compiling /api/auth/me ...
+ ✓ Compiled /api/auth/me in 1354ms (2966 modules)
+ ✓ Compiled (2975 modules)
+ GET /api/public/branding 200 in 1087ms
+ GET /manifest.webmanifest 200 in 1129ms
+ GET /api/auth/me 200 in 1239ms
+ GET /communications 200 in 1279ms
+ ✓ Compiled /api/pwa/icon in 217ms (1588 modules)
+ GET /api/pwa/icon?size=64 200 in 329ms
+ GET /communications 200 in 148ms
+ GET /api/pwa/icon?size=64 200 in 34ms
+ GET /manifest.webmanifest 200 in 33ms
+ GET /api/pwa/icon?size=64 200 in 44ms
+ GET /api/pwa/icon?size=64 200 in 33ms
+ GET /api/pwa/icon?size=64 200 in 33ms
+ GET /api/pwa/icon?size=64 200 in 41ms
+ GET /api/public/branding 200 in 42ms
+ GET /api/pwa/icon?size=64 200 in 94ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 87ms
+ GET /api/auth/me 200 in 100ms
+ GET /api/public/branding 200 in 46ms
+ GET /api/pwa/icon?size=64 200 in 64ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 82ms
+ GET /api/auth/me 200 in 89ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 38ms
+ GET /api/admin/notifications 200 in 113ms
+ GET /api/admin/communications 200 in 120ms
+ GET /api/admin/notifications 200 in 184ms
+ GET /api/admin/communications 200 in 186ms
+ ✓ Compiled /api/auth/login in 330ms (1590 modules)
+ POST /api/auth/login 200 in 477ms
+ GET /api/admin/communications 200 in 92ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 2111ms
+ GET /api/admin/notifications 200 in 70ms
+ GET /api/admin/notifications 200 in 87ms
+ GET /api/admin/notifications 200 in 56ms
+ GET /api/admin/enquiries 200 in 92ms
+ GET /api/admin/enquiries 200 in 58ms
+ GET /api/admin/payments 200 in 76ms
+ GET /api/admin/payments 200 in 63ms
+ GET /api/admin/notifications 200 in 2113ms
+ GET /api/admin/notifications 200 in 56ms
+ GET /api/admin/notifications 200 in 68ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/ai-assist 200 in 80ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/admin/ai-assist 200 in 80ms
+ GET /api/admin/notifications 200 in 158ms
+ ○ Compiling /api/settings/[key] ...
+ ✓ Compiled /api/settings/[key] in 751ms (2955 modules)
+ GET /api/admin/notifications 200 in 707ms
+ GET /api/settings/site 200 in 1280ms
+ GET /api/settings/site 200 in 31ms
+ GET /api/admin/dashboard 200 in 100ms
+ GET /api/admin/audit 200 in 101ms
+ GET /api/admin/dashboard 200 in 80ms
+ GET /api/admin/audit 200 in 84ms
+ GET /api/admin/notifications 200 in 2146ms
+ GET /api/admin/users 200 in 2140ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/admin/users 200 in 81ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 68ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 86ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 70ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/admin/notifications 200 in 2115ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 62ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/student/overview 200 in 83ms
+ GET /api/student/overview 200 in 65ms
+ GET /api/student/hostel 200 in 2122ms
+ GET /api/admin/notifications 200 in 2135ms
+ GET /api/student/hostel 200 in 78ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 62ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 70ms
+ GET /api/admin/notifications 200 in 56ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 2108ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/parent/children 200 in 67ms
+ GET /api/parent/children 200 in 68ms
+ GET /api/admin/notifications 200 in 2104ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/parent/children/learner-1/overview 200 in 2110ms
+ GET /api/admin/notifications 200 in 88ms
+ GET /api/student/overview 200 in 83ms
+ GET /api/student/hostel 200 in 142ms
+ GET /api/admin/notifications 200 in 97ms
+ GET /api/student/overview 200 in 115ms
+ GET /api/student/hostel 200 in 89ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 86ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/teacher/classes 200 in 101ms
+ GET /api/teacher/assessments/overview 200 in 76ms
+ GET /api/teacher/resources 200 in 59ms
+ GET /api/teacher/reports 200 in 76ms
+ GET /api/teacher/calendar 200 in 57ms
+ GET /api/teacher/notifications 200 in 78ms
+ GET /api/teacher/gradebook 200 in 85ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/teacher/classes 200 in 82ms
+ GET /api/teacher/assessments/overview 200 in 127ms
+ GET /api/teacher/resources 200 in 66ms
+ GET /api/teacher/reports 200 in 63ms
+ GET /api/teacher/calendar 200 in 70ms
+ GET /api/teacher/notifications 200 in 70ms
+ GET /api/teacher/gradebook 200 in 63ms
+ GET /api/teacher/profile 200 in 2169ms
+ GET /api/teacher/dashboard 200 in 2179ms
+ GET /api/teacher/appointments 200 in 2182ms
+ GET /api/teacher/messages 200 in 2185ms
+ GET /api/teacher/profile 200 in 96ms
+ GET /api/teacher/appointments 200 in 98ms
+ GET /api/teacher/messages 200 in 93ms
+ GET /api/teacher/dashboard 200 in 104ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/notifications 200 in 92ms
+ GET /api/hostel/overview 200 in 103ms
+ GET /api/hostel/dashboard 200 in 104ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/hostel/dashboard 200 in 90ms
+ GET /api/hostel/overview 200 in 93ms
+ GET /api/students?status=ACTIVE&search= 200 in 74ms
+ GET /api/admin/notifications 200 in 81ms
+ GET /api/students?status=ACTIVE&search= 200 in 74ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/notifications 200 in 86ms
+ GET /api/applications/forms 200 in 82ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/applications/forms 200 in 82ms
+ GET /api/admin/notifications 200 in 87ms
+ GET /api/applications/forms/form-admissions/submissions 200 in 93ms
+ GET /api/admin/notifications 200 in 103ms
+ GET /api/student/overview 200 in 92ms
+ GET /api/student/hostel 200 in 148ms
+ GET /api/admin/notifications 200 in 92ms
+ GET /api/student/overview 200 in 91ms
+ GET /api/student/hostel 200 in 91ms
+ GET /api/admin/notifications 200 in 83ms
+ GET /api/parent/children 200 in 75ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/parent/children 200 in 82ms
+ GET /api/parent/children/learner-1/overview 200 in 69ms
+ GET /api/students?status=ACTIVE&search= 200 in 85ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/students?status=ACTIVE&search= 200 in 68ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/notifications 200 in 135ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/students/learner-1 200 in 76ms
+ GET /api/students/learner-1 200 in 67ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/students/learner-2 200 in 72ms
+ GET /api/admin/notifications 200 in 60ms
+ ✓ Compiled in 984ms (2966 modules)
+ GET /students 200 in 121ms
+ ✓ Compiled /api/auth/me in 176ms (1579 modules)
+ ✓ Compiled (1583 modules)
+ GET /api/public/branding 200 in 661ms
+ GET /manifest.webmanifest 200 in 683ms
+ GET /api/auth/me 200 in 675ms
+ GET /api/public/branding 200 in 35ms
+ GET /api/auth/me 200 in 49ms
+ GET /api/students?status=ACTIVE&search= 200 in 110ms
+ GET /api/admin/notifications 200 in 112ms
+ GET /api/students?status=ACTIVE&search= 200 in 74ms
+ GET /api/admin/notifications 200 in 80ms
+ ✓ Compiled in 526ms (2975 modules)
+ GET /api/admin/notifications 200 in 2163ms
+ GET /students 200 in 526ms
+ GET /manifest.webmanifest 200 in 30ms
+ ✓ Compiled in 657ms (2975 modules)
+ GET /students 200 in 153ms
+ GET /api/admin/notifications 200 in 493ms
+ GET /manifest.webmanifest 200 in 22ms
+ ✓ Compiled in 519ms (2971 modules)
+ GET /students 200 in 64ms
+ GET /manifest.webmanifest 200 in 24ms
+ GET /students 200 in 140ms
+ ✓ Compiled /api/pwa/icon in 373ms (1584 modules)
+ GET /api/pwa/icon?size=64 200 in 505ms
+ ✓ Compiled /api/auth/me in 158ms (1586 modules)
+ ✓ Compiled (1588 modules)
+ GET /api/public/branding 200 in 402ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 419ms
+ GET /api/auth/me 200 in 424ms
+ GET /api/public/branding 200 in 34ms
+ GET /api/auth/me 200 in 51ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/students?status=ACTIVE&search= 200 in 2163ms
+ GET /api/students?status=ACTIVE&search= 200 in 80ms
+ GET /api/students/learner-1 200 in 61ms
+ POST /api/students/learner-1/guardians 201 in 98ms
+ GET /api/students/learner-1 200 in 56ms
+ GET /api/students?status=ACTIVE&search= 200 in 56ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 64ms
+ ✓ Compiled in 759ms (2966 modules)
+ GET /students 200 in 145ms
+ GET /api/admin/notifications 200 in 133ms
+ GET /api/students?status=ACTIVE&search= 200 in 135ms
+ GET /api/students?status=ACTIVE&search= 200 in 78ms
+ GET /api/admin/notifications 200 in 82ms
+ GET /api/students?status=ACTIVE&search= 200 in 82ms
+ GET /api/admin/notifications 200 in 89ms
+ ✓ Compiled /api/pwa/icon in 169ms (1579 modules)
+ ✓ Compiled (1584 modules)
+ GET /api/pwa/icon?size=64 200 in 404ms
+ GET /manifest.webmanifest 200 in 426ms
+ GET /api/pwa/icon?size=64 200 in 37ms
+ GET /api/pwa/icon?size=64 200 in 36ms
+ GET /api/pwa/icon?size=64 200 in 30ms
+ GET /api/students/learner-1 200 in 85ms
+ ✓ Compiled in 541ms (2976 modules)
+ GET /students 200 in 96ms
+ GET /manifest.webmanifest 200 in 35ms
+ GET /api/pwa/icon?size=64 200 in 53ms
+ GET /api/pwa/icon?size=64 200 in 36ms
+ GET /api/pwa/icon?size=64 200 in 34ms
+ GET /api/pwa/icon?size=64 200 in 39ms
+ GET /api/admin/notifications 200 in 95ms
+ ✓ Compiled in 816ms (2976 modules)
+ GET /students 200 in 89ms
+ GET /manifest.webmanifest 200 in 39ms
+ GET /api/pwa/icon?size=64 200 in 61ms
+ GET /api/pwa/icon?size=64 200 in 35ms
+ GET /api/pwa/icon?size=64 200 in 39ms
+ GET /api/pwa/icon?size=64 200 in 42ms
+ GET /api/admin/notifications 200 in 95ms
+ GET /students 200 in 127ms
+ GET /api/pwa/icon?size=64 200 in 39ms
+ ✓ Compiled /api/auth/me in 321ms (1586 modules)
+ ✓ Compiled (1588 modules)
+ GET /api/public/branding 200 in 650ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 666ms
+ GET /api/auth/me 200 in 672ms
+ GET /api/public/branding 200 in 34ms
+ GET /api/auth/me 200 in 35ms
+ GET /api/students?status=ACTIVE&search= 200 in 91ms
+ GET /api/admin/notifications 200 in 93ms
+ GET /api/students?status=ACTIVE&search= 200 in 69ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/students/learner-1 200 in 61ms
+ GET /api/parent/children 200 in 86ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/parent/children 200 in 146ms
+ GET /api/admin/notifications 200 in 154ms
+ GET /api/parent/children/learner-1/overview 200 in 79ms
+ GET /api/parent/profile 200 in 71ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/teacher/dashboard 200 in 104ms
+ GET /api/teacher/assessments/overview 200 in 64ms
+ GET /api/teacher/resources 200 in 69ms
+ GET /api/teacher/reports 200 in 77ms
+ GET /api/teacher/calendar 200 in 75ms
+ GET /api/teacher/notifications 200 in 73ms
+ GET /api/teacher/gradebook 200 in 76ms
+ GET /api/admin/notifications 200 in 89ms
+ GET /api/teacher/dashboard 200 in 84ms
+ GET /api/teacher/assessments/overview 200 in 101ms
+ GET /api/teacher/resources 200 in 106ms
+ GET /api/teacher/reports 200 in 123ms
+ GET /api/teacher/calendar 200 in 63ms
+ GET /api/teacher/notifications 200 in 69ms
+ GET /api/teacher/gradebook 200 in 57ms
+ GET /api/teacher/messages 200 in 2157ms
+ GET /api/teacher/profile 200 in 2158ms
+ GET /api/teacher/appointments 200 in 2161ms
+ GET /api/teacher/classes 200 in 2174ms
+ GET /api/teacher/messages 200 in 94ms
+ GET /api/teacher/profile 200 in 138ms
+ GET /api/teacher/appointments 200 in 144ms
+ GET /api/teacher/classes 200 in 122ms
+ ✓ Compiled in 1291ms (2966 modules)
+ GET /teacher-portal 200 in 131ms
+ ✓ Compiled /api/auth/me in 164ms (1579 modules)
+ ✓ Compiled (1583 modules)
+ GET /api/public/branding 200 in 423ms
+ GET /manifest.webmanifest 200 in 443ms
+ GET /api/auth/me 200 in 438ms
+ GET /api/public/branding 200 in 30ms
+ GET /api/auth/me 200 in 54ms
+ GET /api/admin/notifications 200 in 145ms
+ GET /api/teacher/dashboard 200 in 169ms
+ GET /api/teacher/messages 200 in 170ms
+ GET /api/teacher/profile 200 in 162ms
+ GET /api/teacher/classes 200 in 176ms
+ GET /api/teacher/appointments 200 in 96ms
+ GET /api/teacher/notifications 200 in 136ms
+ GET /api/teacher/calendar 200 in 137ms
+ GET /api/teacher/reports 200 in 138ms
+ GET /api/teacher/gradebook 200 in 116ms
+ GET /api/teacher/resources 200 in 142ms
+ GET /api/admin/notifications 200 in 108ms
+ GET /api/teacher/messages 200 in 108ms
+ GET /api/teacher/classes 200 in 112ms
+ GET /api/teacher/dashboard 200 in 113ms
+ GET /api/teacher/profile 200 in 114ms
+ GET /api/teacher/appointments 200 in 122ms
+ GET /api/teacher/reports 200 in 129ms
+ GET /api/teacher/calendar 200 in 131ms
+ GET /api/teacher/gradebook 200 in 135ms
+ GET /api/teacher/notifications 200 in 137ms
+ GET /api/teacher/resources 200 in 55ms
+ GET /api/teacher/assessments/overview 200 in 2139ms
+ GET /api/teacher/assessments/overview 200 in 70ms
+ ✓ Compiled /api/auth/login in 186ms (1585 modules)
+ POST /api/auth/login 200 in 451ms
+ GET /api/parent/children 200 in 77ms
+ POST /api/auth/login 200 in 93ms
+ GET /api/parent/children 200 in 69ms
+ GET /api/admin/notifications 200 in 64ms
+ POST /api/auth/login 200 in 89ms
+ GET /api/parent/children 200 in 61ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/notifications 200 in 97ms
+ GET /api/parent/children 200 in 94ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/parent/children 200 in 114ms
+ GET /api/parent/children/learner-1/overview 200 in 80ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/admin/notifications 200 in 111ms
+ GET /api/teacher/classes 200 in 122ms
+ GET /api/teacher/profile 200 in 124ms
+ GET /api/teacher/messages 200 in 126ms
+ GET /api/teacher/dashboard 200 in 127ms
+ GET /api/teacher/assessments/overview 200 in 97ms
+ GET /api/teacher/reports 200 in 120ms
+ GET /api/teacher/resources 200 in 123ms
+ GET /api/teacher/calendar 200 in 124ms
+ GET /api/teacher/notifications 200 in 130ms
+ GET /api/teacher/gradebook 200 in 116ms
+ GET /api/teacher/profile 200 in 210ms
+ GET /api/teacher/classes 200 in 214ms
+ GET /api/teacher/messages 200 in 202ms
+ GET /api/admin/notifications 200 in 221ms
+ GET /api/teacher/dashboard 200 in 100ms
+ GET /api/teacher/reports 200 in 118ms
+ GET /api/teacher/assessments/overview 200 in 120ms
+ GET /api/teacher/resources 200 in 125ms
+ GET /api/teacher/calendar 200 in 117ms
+ GET /api/teacher/notifications 200 in 79ms
+ GET /api/teacher/gradebook 200 in 76ms
+ GET /api/teacher/appointments 200 in 2145ms
+ GET /api/teacher/appointments 200 in 66ms
+ GET /api/admin/notifications 200 in 65ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/parent/children 200 in 94ms
+ GET /api/admin/notifications 200 in 95ms
+ GET /api/parent/children 200 in 94ms
+ GET /api/admin/notifications 200 in 116ms
+ GET /api/parent/children/learner-1/overview 200 in 84ms
+ GET /api/admin/notifications 200 in 77ms
+ ✓ Compiled in 901ms (2966 modules)
+ GET /parent-portal 200 in 136ms
+ ✓ Compiled /manifest.webmanifest in 148ms (1577 modules)
+ ✓ Compiled (1583 modules)
+ GET /manifest.webmanifest 200 in 441ms
+ GET /api/public/branding 200 in 443ms
+ GET /api/auth/me 200 in 443ms
+ GET /api/public/branding 200 in 33ms
+ GET /api/auth/me 200 in 47ms
+ GET /api/parent/children 200 in 116ms
+ GET /api/admin/notifications 200 in 118ms
+ GET /api/parent/children 200 in 90ms
+ GET /api/admin/notifications 200 in 95ms
+ GET /api/parent/children/learner-1/overview 200 in 87ms
+ ✓ Compiled in 569ms (2975 modules)
+ GET /parent-portal 200 in 85ms
+ GET /manifest.webmanifest 200 in 2075ms
+ GET /api/admin/notifications 200 in 2141ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 112ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 2149ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 71ms
+ GET /api/admin/notifications 200 in 61ms
+ ✓ Compiled in 1263ms (2966 modules)
+ GET /parent-portal 200 in 152ms
+ ✓ Compiled /manifest.webmanifest in 149ms (1579 modules)
+ GET /manifest.webmanifest 200 in 251ms
+ GET /api/admin/notifications 200 in 127ms
+ ✓ Compiled in 800ms (2971 modules)
+ GET /parent-portal 200 in 140ms
+ GET /manifest.webmanifest 200 in 34ms
+ GET /api/admin/notifications 200 in 114ms
+ ✓ Compiled in 491ms (2971 modules)
+ GET /parent-portal 200 in 104ms
+ GET /manifest.webmanifest 200 in 35ms
+ GET /api/admin/notifications 200 in 101ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/payments 200 in 2145ms
+ GET /api/admin/payments 200 in 70ms
+ ✓ Compiled /api/auth/login in 176ms (1581 modules)
+ POST /api/auth/login 200 in 303ms
+ GET /api/admin/finance/fees 200 in 70ms
+ POST /api/auth/login 200 in 89ms
+ POST /api/auth/login 200 in 96ms
+ POST /api/admin/finance/payments 400 in 79ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /payments 200 in 135ms
+ ✓ Compiled /api/pwa/icon in 343ms (1586 modules)
+ GET /api/pwa/icon?size=64 200 in 446ms
+ ✓ Compiled /api/auth/me in 165ms (1588 modules)
+ ✓ Compiled (1590 modules)
+ GET /api/public/branding 200 in 564ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 585ms
+ GET /api/auth/me 200 in 590ms
+ GET /api/public/branding 200 in 33ms
+ GET /api/auth/me 200 in 51ms
+ GET /api/admin/notifications 200 in 92ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/payments 200 in 2118ms
+ GET /api/admin/payments 200 in 83ms
+ GET /payments 200 in 169ms
+ GET /api/pwa/icon?size=64 200 in 44ms
+ GET /api/public/branding 200 in 39ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 65ms
+ GET /api/auth/me 200 in 70ms
+ GET /api/public/branding 200 in 31ms
+ GET /api/auth/me 200 in 42ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/payments 200 in 92ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/payments 200 in 72ms
+ GET /api/admin/notifications 200 in 101ms
+ ○ Compiling /api/tickets/requisitions ...
+ ✓ Compiled /api/tickets/requisitions in 1159ms (2969 modules)
+ GET /api/tickets/requisitions? 200 in 1326ms
+ GET /requisitions 200 in 218ms
+ GET /api/admin/notifications 200 in 1317ms
+ GET /api/tickets/requisitions? 200 in 38ms
+ GET /api/public/branding 200 in 46ms
+ GET /api/auth/me 200 in 66ms
+ ✓ Compiled /manifest.webmanifest in 246ms (1595 modules)
+ GET /api/public/branding 200 in 536ms
+ GET /manifest.webmanifest 200 in 572ms
+ GET /api/auth/me 200 in 523ms
+ GET /api/admin/notifications 200 in 537ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/tickets/requisitions/overview 200 in 3354ms
+ GET /api/tickets/requisitions/overview 200 in 35ms
+ GET /api/tickets/requisitions/overview 200 in 28ms
+ GET /api/tickets/requisitions/overview 200 in 37ms
+ GET /api/tickets/requisitions? 200 in 2520ms
+ GET /api/tickets/requisitions? 200 in 36ms
+ GET /api/admin/notifications 200 in 134ms
+ GET /api/admin/dashboard 200 in 128ms
+ GET /api/admin/users 200 in 152ms
+ GET /api/admin/audit 200 in 155ms
+ GET /api/admin/notifications 200 in 150ms
+ GET /api/admin/dashboard 200 in 201ms
+ GET /api/admin/users 200 in 95ms
+ GET /api/admin/audit 200 in 103ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 62ms
+ GET /api/admin/notifications 200 in 2118ms
+ ✓ Compiled in 896ms (2966 modules)
+ GET / 200 in 132ms
+ ✓ Compiled /api/auth/me in 159ms (1579 modules)
+ ✓ Compiled (1583 modules)
+ GET /api/public/branding 200 in 429ms
+ GET /manifest.webmanifest 200 in 444ms
+ GET /api/auth/me 200 in 438ms
+ GET /api/public/branding 200 in 49ms
+ GET /api/auth/me 200 in 109ms
+ GET /api/admin/dashboard 200 in 132ms
+ GET /api/admin/dashboard 200 in 58ms
+ GET /api/admin/notifications 200 in 2184ms
+ GET /api/admin/audit 200 in 2200ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/admin/audit 200 in 68ms
+ GET /api/admin/users 200 in 4222ms
+ GET /api/admin/users 200 in 88ms
+ GET / 200 in 138ms
+ ✓ Compiled /api/pwa/icon in 228ms (1588 modules)
+ GET /api/pwa/icon?size=64 200 in 409ms
+ GET /api/public/branding 200 in 41ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 76ms
+ GET /api/auth/me 200 in 87ms
+ GET /api/public/branding 200 in 36ms
+ GET /api/auth/me 200 in 49ms
+ GET /api/admin/notifications 200 in 114ms
+ GET /api/admin/dashboard 200 in 122ms
+ GET /api/admin/audit 200 in 128ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/admin/dashboard 200 in 86ms
+ GET /api/admin/audit 200 in 103ms
+ GET /api/admin/users 200 in 2130ms
+ GET /api/admin/users 200 in 69ms
+ GET /api/admin/notifications 200 in 95ms
+ GET /api/admin/payments 200 in 102ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/payments 200 in 73ms
+ GET /api/admin/finance/fees 200 in 71ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 64ms
+ ✓ Compiled in 926ms (2966 modules)
+ GET /payments 200 in 174ms
+ ✓ Compiled /api/auth/me in 166ms (1579 modules)
+ ✓ Compiled (1583 modules)
+ GET /api/public/branding 200 in 424ms
+ GET /manifest.webmanifest 200 in 444ms
+ GET /api/auth/me 200 in 436ms
+ GET /api/public/branding 200 in 30ms
+ GET /api/auth/me 200 in 45ms
+ GET /api/admin/notifications 200 in 102ms
+ GET /api/admin/payments 200 in 104ms
+ GET /api/admin/notifications 200 in 83ms
+ GET /api/admin/payments 200 in 85ms
+ ✓ Compiled in 601ms (2975 modules)
+ GET /api/admin/notifications 200 in 127ms
+ GET /api/admin/payments 200 in 135ms
+ GET /payments 200 in 496ms
+ GET /manifest.webmanifest 200 in 35ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/admin/payments 200 in 97ms
+ GET /api/admin/notifications 200 in 89ms
+ GET /api/admin/payments 200 in 82ms
+ GET /api/admin/notifications 200 in 62ms
+ ✓ Compiled in 434ms (2975 modules)
+ GET /payments 200 in 91ms
+ GET /manifest.webmanifest 200 in 78ms
+ ✓ Compiled /api/auth/login in 134ms (1581 modules)
+ POST /api/auth/login 200 in 251ms
+ GET /api/admin/finance/learners?search=ari 200 in 74ms
+ GET /api/admin/notifications 200 in 87ms
+ ✓ Compiled in 571ms (2973 modules)
+ GET /payments 200 in 56ms
+ GET /manifest.webmanifest 200 in 31ms
+ GET /api/admin/notifications 200 in 67ms
+ ✓ Compiled in 404ms (2973 modules)
+ GET /payments 200 in 51ms
+ GET /manifest.webmanifest 200 in 22ms
+ GET /api/admin/notifications 200 in 76ms
+ ✓ Compiled in 582ms (2971 modules)
+ GET /payments 200 in 60ms
+ GET /manifest.webmanifest 200 in 2071ms
+ GET /api/admin/notifications 200 in 2157ms
+ GET /payments 200 in 139ms
+ ✓ Compiled /api/pwa/icon in 391ms (1584 modules)
+ GET /api/pwa/icon?size=64 200 in 507ms
+ ✓ Compiled /api/auth/me in 175ms (1586 modules)
+ ✓ Compiled (1588 modules)
+ GET /api/public/branding 200 in 523ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 534ms
+ GET /api/auth/me 200 in 545ms
+ GET /api/public/branding 200 in 31ms
+ GET /api/auth/me 200 in 40ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/payments 200 in 99ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/payments 200 in 72ms
+ GET /api/admin/notifications 200 in 88ms
+ GET /api/admin/notifications 200 in 83ms
+ ○ Compiling /_error ...
+ GET /api/admin/notifications 500 in 1635ms
+ GET /payments 500 in 754ms
+ GET /payments 500 in 28ms
+ GET /payments 500 in 24ms
+ GET /favicon.ico 500 in 17ms
+ ✓ Compiled /_error in 749ms (3312 modules)
+ GET /_next/static/webpack/0e2184bdd0a05210.webpack.hot-update.json 200 in 221ms
+ GET /payments 200 in 274ms
+ ✓ Compiled /api/pwa/icon in 337ms (1774 modules)
+ GET /api/pwa/icon?size=64 200 in 440ms
+ ✓ Compiled /api/auth/me in 172ms (1776 modules)
+ ✓ Compiled (1778 modules)
+ GET /api/public/branding 200 in 542ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 559ms
+ GET /api/auth/me 200 in 564ms
+ GET /api/public/branding 200 in 24ms
+ GET /api/auth/me 200 in 32ms
+ GET /api/admin/notifications 200 in 97ms
+ GET /api/admin/payments 200 in 103ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/payments 200 in 67ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /payments 200 in 147ms
+ GET /api/pwa/icon?size=64 200 in 45ms
+ GET /api/public/branding 200 in 35ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 63ms
+ GET /api/auth/me 200 in 70ms
+ GET /api/public/branding 200 in 29ms
+ GET /api/auth/me 200 in 27ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/payments 200 in 83ms
+ GET /api/admin/notifications 200 in 81ms
+ GET /api/admin/payments 200 in 69ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/notifications 200 in 74ms
+ ✓ Compiled in 978ms (3216 modules)
+ GET /payments 200 in 191ms
+ ✓ Compiled /manifest.webmanifest in 164ms (1679 modules)
+ ✓ Compiled (1683 modules)
+ GET /manifest.webmanifest 200 in 581ms
+ GET /api/pwa/icon?size=64 200 in 610ms
+ GET /api/pwa/icon?size=64 200 in 28ms
+ GET /api/pwa/icon?size=64 200 in 32ms
+ GET /api/pwa/icon?size=64 200 in 28ms
+ GET /api/admin/notifications 200 in 93ms
+ ✓ Compiled in 1035ms (3226 modules)
+ GET /payments 200 in 102ms
+ GET /api/admin/notifications 200 in 123ms
+ GET /api/admin/payments 200 in 138ms
+ GET /api/pwa/icon?size=64 200 in 54ms
+ GET /api/admin/notifications 200 in 121ms
+ GET /api/pwa/icon?size=64 200 in 55ms
+ GET /api/admin/payments 200 in 117ms
+ GET /manifest.webmanifest 200 in 38ms
+ GET /api/pwa/icon?size=64 200 in 67ms
+ GET /api/pwa/icon?size=64 200 in 44ms
+ GET /api/admin/notifications 200 in 143ms
+ GET /api/admin/payments 200 in 127ms
+ ✓ Compiled in 552ms (3226 modules)
+ GET /payments 200 in 95ms
+ GET /manifest.webmanifest 200 in 49ms
+ GET /api/pwa/icon?size=64 200 in 69ms
+ GET /api/pwa/icon?size=64 200 in 42ms
+ GET /api/pwa/icon?size=64 200 in 71ms
+ GET /api/pwa/icon?size=64 200 in 35ms
+ ✓ Compiled /api/auth/login in 174ms (1685 modules)
+ POST /api/auth/login 200 in 298ms
+ GET /api/admin/payments 200 in 81ms
+ GET /api/admin/notifications 200 in 65ms
+ POST /api/admin/finance/payments/payment-seeded-1/verify 200 in 2166ms
+ GET /api/admin/payments 200 in 72ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 67ms
+ ✓ Compiled in 686ms (3216 modules)
+ GET /payments 200 in 226ms
+ GET /api/admin/notifications 200 in 117ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 68ms
+ ✓ Compiled /api/pwa/icon in 165ms (1679 modules)
+ GET /api/pwa/icon?size=64 200 in 257ms
+ ✓ Compiled /manifest.webmanifest in 146ms (1683 modules)
+ GET /manifest.webmanifest 200 in 371ms
+ GET /api/pwa/icon?size=64 200 in 371ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/pwa/icon?size=64 200 in 25ms
+ GET /api/admin/payments 200 in 2167ms
+ GET /api/admin/payments 200 in 89ms
+ GET /api/admin/payments 200 in 55ms
+ ✓ Compiled in 560ms (3226 modules)
+ GET /payments 200 in 80ms
+ GET /manifest.webmanifest 200 in 31ms
+ GET /api/pwa/icon?size=64 200 in 46ms
+ GET /api/pwa/icon?size=64 200 in 26ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/pwa/icon?size=64 200 in 29ms
+ GET /api/admin/notifications 200 in 100ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/finance/fees 200 in 83ms
+ ✓ Compiled in 745ms (3216 modules)
+ GET /payments 200 in 246ms
+ GET /payments 200 in 117ms
+ ✓ Compiled /api/pwa/icon in 199ms (1679 modules)
+ GET /api/pwa/icon?size=64 200 in 280ms
+ ✓ Compiled /api/auth/me in 252ms (1681 modules)
+ ✓ Compiled (1683 modules)
+ GET /api/public/branding 200 in 565ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 573ms
+ GET /api/auth/me 200 in 587ms
+ GET /api/public/branding 200 in 33ms
+ GET /api/auth/me 200 in 45ms
+ GET /api/admin/notifications 200 in 116ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/payments 200 in 2160ms
+ GET /api/admin/payments 200 in 104ms
+ ✓ Compiled in 443ms (3226 modules)
+ GET /payments 200 in 182ms
+ GET /api/pwa/icon?size=64 200 in 64ms
+ GET /api/public/branding 200 in 46ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 82ms
+ GET /api/auth/me 200 in 90ms
+ GET /api/public/branding 200 in 27ms
+ GET /api/auth/me 200 in 24ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/payments 200 in 125ms
+ GET /api/admin/notifications 200 in 87ms
+ GET /api/admin/payments 200 in 82ms
+ ✓ Compiled in 461ms (3226 modules)
+ GET /payments 200 in 153ms
+ GET /api/pwa/icon?size=64 200 in 45ms
+ GET /api/public/branding 200 in 38ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 69ms
+ GET /api/auth/me 200 in 77ms
+ GET /api/public/branding 200 in 47ms
+ GET /api/auth/me 200 in 32ms
+ GET /api/admin/notifications 200 in 128ms
+ GET /api/admin/payments 200 in 136ms
+ GET /api/admin/notifications 200 in 177ms
+ GET /api/admin/payments 200 in 148ms
+ ✓ Compiled in 473ms (3226 modules)
+ GET /payments 200 in 105ms
+ GET /api/pwa/icon?size=64 200 in 50ms
+ GET /api/public/branding 200 in 47ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 79ms
+ GET /api/auth/me 200 in 86ms
+ GET /api/public/branding 200 in 30ms
+ GET /api/auth/me 200 in 37ms
+ GET /api/admin/notifications 200 in 98ms
+ GET /api/admin/payments 200 in 101ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/payments 200 in 89ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 2152ms
+ ✓ Compiled in 788ms (3226 modules)
+ GET /payments 200 in 167ms
+ ✓ Compiled /manifest.webmanifest in 367ms (1687 modules)
+ GET /manifest.webmanifest 200 in 635ms
+ GET /api/pwa/icon?size=64 200 in 624ms
+ GET /api/pwa/icon?size=64 200 in 31ms
+ GET /api/pwa/icon?size=64 200 in 30ms
+ GET /api/pwa/icon?size=64 200 in 31ms
+ GET /api/admin/notifications 200 in 98ms
+ GET /api/admin/notifications 200 in 54ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/notifications 200 in 65ms
+ GET /api/admin/notifications 200 in 66ms
+ ✓ Compiled in 783ms (3216 modules)
+ GET /payments 200 in 127ms
+ ✓ Compiled /api/pwa/icon in 169ms (1678 modules)
+ ✓ Compiled (1683 modules)
+ GET /api/pwa/icon?size=64 200 in 421ms
+ GET /manifest.webmanifest 200 in 444ms
+ GET /api/pwa/icon?size=64 200 in 28ms
+ GET /api/pwa/icon?size=64 200 in 25ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/admin/notifications 200 in 104ms
+ ✓ Compiled in 580ms (3226 modules)
+ GET /payments 200 in 75ms
+ GET /manifest.webmanifest 200 in 26ms
+ GET /api/pwa/icon?size=64 200 in 40ms
+ GET /api/pwa/icon?size=64 200 in 26ms
+ GET /api/pwa/icon?size=64 200 in 26ms
+ GET /api/pwa/icon?size=64 200 in 26ms
+ ✓ Compiled in 620ms (3226 modules)
+ GET /payments 200 in 137ms
+ GET /manifest.webmanifest 200 in 27ms
+ GET /api/pwa/icon?size=64 200 in 44ms
+ GET /api/pwa/icon?size=64 200 in 32ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/pwa/icon?size=64 200 in 40ms
+ GET /api/admin/notifications 200 in 115ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/notifications 200 in 91ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/admin/enquiries 200 in 2121ms
+ GET /api/admin/enquiries 200 in 57ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/notifications 200 in 81ms
+ GET /api/admin/communications 200 in 89ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/admin/communications 200 in 71ms
+ GET /api/admin/notifications 200 in 90ms
+ GET /api/admin/notifications 200 in 56ms
+ GET /api/admin/payments 200 in 2131ms
+ GET /api/admin/payments 200 in 66ms
+ GET /api/students?status=ACTIVE&search= 200 in 79ms
+ GET /api/admin/notifications 200 in 86ms
+ GET /api/students?status=ACTIVE&search= 200 in 81ms
+ GET /api/admin/notifications 200 in 101ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/hostel/dashboard 200 in 84ms
+ GET /api/admin/notifications 200 in 89ms
+ GET /api/hostel/dashboard 200 in 78ms
+ GET /api/hostel/overview 200 in 2137ms
+ GET /api/hostel/overview 200 in 57ms
+ GET /api/parent/children 200 in 76ms
+ GET /api/admin/notifications 200 in 79ms
+ GET /api/parent/children 200 in 81ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/parent/children/learner-1/overview 200 in 78ms
+ GET /api/parent/children/learner-1/statement 403 in 76ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 67ms

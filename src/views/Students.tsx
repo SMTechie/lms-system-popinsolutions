@@ -39,6 +39,14 @@ const permissionKeys = [
   "viewHostelMovement",
 ];
 
+const newGuardian = () => ({
+  email: "",
+  name: "",
+  relationshipType: "Guardian",
+  isPrimary: true,
+  ...Object.fromEntries(permissionKeys.map((key) => [key, true])),
+});
+
 export default function Students() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
@@ -54,13 +62,8 @@ export default function Students() {
   const [teacher, setTeacher] = useState({ name: "", email: "", temporaryPassword: "" });
   const [showAcademic, setShowAcademic] = useState(false);
   const [academic, setAcademic] = useState<any>({ type: "grade", name: "", code: "", gradeId: "", room: "" });
-  const [guardian, setGuardian] = useState<any>({
-    email: "",
-    name: "",
-    relationshipType: "Guardian",
-    isPrimary: true,
-    ...Object.fromEntries(permissionKeys.map((key) => [key, true])),
-  });
+  const [guardian, setGuardian] = useState<any>(newGuardian);
+  const [guardianErrors, setGuardianErrors] = useState<Record<string, string>>({});
   const [move, setMove] = useState({ gradeId: "", classId: "", reason: "Class transfer" });
 
   const load = async () => {
@@ -125,9 +128,23 @@ export default function Students() {
   };
 
   const linkGuardian = async () => {
+    const email = String(guardian.email || "").trim().toLowerCase();
+    const name = String(guardian.name || "").trim();
+    const errors: Record<string, string> = {};
+    if (!/^\S+@\S+\.\S+$/.test(email)) errors.email = "Enter a valid email address.";
+    if (name.length < 2) errors.name = "Enter the parent or guardian’s full name.";
+    if (!guardian.relationshipType) errors.relationshipType = "Choose the relationship to the learner.";
+    if (!permissionKeys.some((key) => guardian[key])) errors.permissions = "Select at least one permission for this guardian.";
+    if ((selected?.guardians || []).some((link: any) => String(link.guardian?.email || "").toLowerCase() === email && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status))) {
+      errors.email = "This email is already linked to this learner.";
+    }
+    setGuardianErrors(errors);
+    if (Object.keys(errors).length) return;
     try {
-      await apiRequest(`/students/${selected.id}/guardians`, { method: "POST", body: JSON.stringify(guardian) });
+      await apiRequest(`/students/${selected.id}/guardians`, { method: "POST", body: JSON.stringify({ ...guardian, email, name }) });
       setShowGuardian(false);
+      setGuardian(newGuardian());
+      setGuardianErrors({});
       setSelected(await apiRequest(`/students/${selected.id}`));
       await load();
       notifyAction("Guardian linked and audited", "success");
@@ -425,18 +442,20 @@ export default function Students() {
         wide
       >
         {selected && (
-          <div className="space-y-5">
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-gradient-to-r from-slate-950 to-slate-800 p-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Student actions</p>
+              <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   setEditing({ ...emptyStudent, ...selected, dateOfBirth: selected.dateOfBirth?.slice(0, 10) || "" });
                   setShowEditor(true);
                 }}
-                className="btn"
+                className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
               >
                 Edit
               </button>
-              <button onClick={() => setShowGuardian(true)} className="btn">
+              <button onClick={() => setShowGuardian(true)} className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-400">
                 <Link2 className="mr-1 inline h-4 w-4" />
                 Link guardian
               </button>
@@ -445,32 +464,36 @@ export default function Students() {
                   setMove({ gradeId: selected.gradeId || "", classId: selected.classId || "", reason: "Class transfer" });
                   setShowMove(true);
                 }}
-                className="btn"
+                className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 <ArrowRightLeft className="mr-1 inline h-4 w-4" />
                 Transfer / promote
               </button>
-              <button onClick={() => void archive()} className="btn text-red-600">
+              <button onClick={() => void archive()} className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/15">
                 <Archive className="mr-1 inline h-4 w-4" />
                 Archive
               </button>
+              </div>
             </div>
 
             {selected.photoUrl && <div className="flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4"><img src={selected.photoUrl} alt={`${selected.firstName} ${selected.lastName}`} className="h-20 w-20 rounded-xl object-cover" /><div><p className="text-xs font-bold uppercase tracking-wide text-gray-500">Student picture</p><p className="mt-1 text-sm text-gray-700">Profile picture attached to this student record.</p></div></div>}
 
-            <section>
-              <h3 className="font-bold">Guardians</h3>
-              <div className="mt-2 space-y-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div><h3 className="font-bold text-slate-950">Parents & guardians</h3><p className="mt-1 text-xs text-slate-500">People with access to this learner’s information.</p></div>
+                <button onClick={() => setShowGuardian(true)} className="text-sm font-semibold text-blue-600 hover:text-blue-700">+ Add guardian</button>
+              </div>
+              <div className="mt-4 space-y-3">
                 {selected.guardians?.map((link: any) => (
-                  <div key={link.id} className="rounded-xl border p-3">
-                    <div className="flex justify-between">
+                  <div key={link.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap justify-between gap-3">
                       <div>
-                        <b className="text-sm">{link.guardian.name || link.guardian.email}</b>
-                        <p className="text-xs text-gray-500">
+                        <b className="text-sm text-slate-900">{link.guardian.name || link.guardian.email}</b>
+                        <p className="mt-1 text-xs text-slate-500">
                           {link.relationshipType} · {link.guardian.email}
                         </p>
                       </div>
-                      <span className="text-xs font-bold text-emerald-600">{link.status}</span>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700">{link.status}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-500">
                       {permissionKeys.filter((key) => link[key]).map(humanize).join(" · ")}
@@ -483,10 +506,10 @@ export default function Students() {
               </div>
             </section>
 
-            <section>
-              <h3 className="font-bold">Placement history</h3>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h3 className="font-bold text-slate-950">Placement history</h3>
               {selected.classHistory?.map((entry: any) => (
-                <p key={entry.id} className="mt-2 text-sm text-gray-600">
+                <p key={entry.id} className="mt-3 border-l-2 border-blue-500 pl-3 text-sm text-slate-600">
                   {new Date(entry.changedAt).toLocaleDateString()} · {entry.reason}
                 </p>
               ))}
@@ -497,17 +520,20 @@ export default function Students() {
 
       <Modal title="Link parent or guardian" isOpen={showGuardian} onClose={() => setShowGuardian(false)}>
         <div className="space-y-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800">Add the parent or guardian’s details below. Their email address will be used to give them access to this learner’s Parent Portal.</div>
           <Field label="Email">
-            <input className={inputClass} value={guardian.email} onChange={(e) => setGuardian({ ...guardian, email: e.target.value })} />
+            <input id="guardian-email" type="email" autoComplete="email" maxLength={254} className={`${inputClass} ${guardianErrors.email ? "border-red-400 focus:border-red-500" : ""}`} value={guardian.email} onChange={(e) => { setGuardian({ ...guardian, email: e.target.value }); setGuardianErrors((current) => ({ ...current, email: "" })); }} placeholder="parent@example.com" aria-invalid={Boolean(guardianErrors.email)} aria-describedby={guardianErrors.email ? "guardian-email-error" : undefined} />
+            {guardianErrors.email && <p id="guardian-email-error" className="mt-1 text-xs text-red-600">{guardianErrors.email}</p>}
           </Field>
           <Field label="Name">
-            <input className={inputClass} value={guardian.name} onChange={(e) => setGuardian({ ...guardian, name: e.target.value })} />
+            <input id="guardian-name" autoComplete="name" maxLength={120} className={`${inputClass} ${guardianErrors.name ? "border-red-400 focus:border-red-500" : ""}`} value={guardian.name} onChange={(e) => { setGuardian({ ...guardian, name: e.target.value }); setGuardianErrors((current) => ({ ...current, name: "" })); }} placeholder="Full name" aria-invalid={Boolean(guardianErrors.name)} aria-describedby={guardianErrors.name ? "guardian-name-error" : undefined} />
+            {guardianErrors.name && <p id="guardian-name-error" className="mt-1 text-xs text-red-600">{guardianErrors.name}</p>}
           </Field>
           <Field label="Relationship">
             <select
-              className={inputClass}
+              className={`${inputClass} ${guardianErrors.relationshipType ? "border-red-400 focus:border-red-500" : ""}`}
               value={guardian.relationshipType}
-              onChange={(e) => setGuardian({ ...guardian, relationshipType: e.target.value })}
+              onChange={(e) => { setGuardian({ ...guardian, relationshipType: e.target.value }); setGuardianErrors((current) => ({ ...current, relationshipType: "" })); }}
             >
               {["Mother", "Father", "Guardian", "Grandparent", "Sponsor", "Emergency contact", "Pickup authorised person"].map(
                 (value) => (
@@ -516,14 +542,19 @@ export default function Students() {
               )}
             </select>
           </Field>
+          <fieldset className={`rounded-xl border p-3 ${guardianErrors.permissions ? "border-red-300 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
+            <legend className="px-1 text-xs font-semibold text-slate-700">Portal permissions</legend>
+            <p className="mb-3 text-xs text-slate-500">Choose what this person may view or manage.</p>
           <div className="grid grid-cols-2 gap-2">
             {permissionKeys.map((key) => (
               <label key={key} className="flex items-center gap-2 text-xs">
-                <input type="checkbox" checked={guardian[key]} onChange={(e) => setGuardian({ ...guardian, [key]: e.target.checked })} />
+                <input type="checkbox" checked={guardian[key]} onChange={(e) => { setGuardian({ ...guardian, [key]: e.target.checked }); setGuardianErrors((current) => ({ ...current, permissions: "" })); }} />
                 {humanize(key)}
               </label>
             ))}
           </div>
+          {guardianErrors.permissions && <p className="mt-2 text-xs text-red-600">{guardianErrors.permissions}</p>}
+          </fieldset>
           <button onClick={() => void linkGuardian()} className="w-full rounded-lg bg-blue-600 py-3 text-sm font-bold text-white">
             Verify and link guardian
           </button>
