@@ -127,7 +127,7 @@ function populateThreeMonthHistory(portal: any, operations: any, end: Date) {
   for (const [index, [id, name, gradeId, room, teacherName, teacherEmail]] of sectionDefinitions.entries()) {
     portal.classes.push({ id, name, gradeId, room, grade: portal.grades.find((grade: any) => grade.id === gradeId), teacherName, teacherEmail, learners: [], assignments: subjects.slice(0, 4).map((subject) => ({ subject })), timetable: ["Mathematics", "English", "Natural Sciences", "Life Skills", "Creative Arts"].map((subject, day) => ({ id: `tt-extra-${index}-${day}`, day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][day], startsAt: "08:00", endsAt: "08:45", subject, room, class: { name, room } })), workItems: subjects.slice(0, 4).flatMap((subject, homeworkIndex) => [{ id: `homework-extra-${index}-${homeworkIndex}`, type: "HOMEWORK", title: `${subject} weekly practice`, status: homeworkIndex === 3 ? "DRAFT" : "PUBLISHED", dueAt: dateAt(end, 2 + homeworkIndex * 6, 14), instructions: `Complete the ${subject.toLowerCase()} activities and submit before the due date.`, visibleToParents: homeworkIndex !== 3 }, { id: `lesson-extra-${index}-${homeworkIndex}`, type: "LESSON_PLAN", title: `${subject} lesson plan`, status: "PUBLISHED", instructions: `Weekly ${subject.toLowerCase()} lesson plan for ${name}.`, visibleToParents: false }]) });
   }
-  const moreLearners = Array.from({ length: 30 }, (_, index) => {
+  Array.from({ length: 30 }, (_, index) => {
     const firstNames = ["Ayesha", "Bongani", "Cebo", "Dineo", "Elijah", "Faith", "Gugu", "Hlumelo", "Ivy", "Jason", "Kamo", "Lihle", "Mpho", "Nandi", "Ofentse", "Palesa", "Qhawe", "Rethabile", "Sanele", "Tebogo", "Ulwazi", "Vuyo", "Wandile", "Xolani", "Yanga", "Zinzi", "Andile", "Busisiwe", "Caitlin", "Dumisani"];
     const lastNames = ["Mabena", "Mthethwa", "Pillay", "Mahlangu", "Botha", "Mokoena"];
     const firstName = firstNames[index]; const lastName = lastNames[index % lastNames.length]; const gradeId = index % 2 ? "grade-9" : "grade-8"; const classId = ["class-8a", "class-8b", "class-8c", "class-9b", "class-9c", "class-9d"][index % 6]; const learnerId = `learner-additional-${index + 1}`; const parentEmail = `parent.${String(firstName).toLowerCase()}.${String(lastName).toLowerCase()}@school.co.za`;
@@ -490,7 +490,7 @@ async function main() {
       entityId: "bootstrap",
       actorId: adminEmail,
       metadata: {
-        message: "Initial Neon seed completed"
+        message: "Initial PostgreSQL seed completed"
       }
     }
   });

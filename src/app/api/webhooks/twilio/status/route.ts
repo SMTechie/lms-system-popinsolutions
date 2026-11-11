@@ -1,3 +1,4 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { appendAuditLog } from "@/src/server/settings";
 import { getPortalData, savePortalData } from "@/src/server/portalData";
@@ -10,7 +11,7 @@ function mapTwilioStatus(status: string) {
   return value.toUpperCase() || "UNKNOWN";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const form = await request.formData();
   const messageSid = String(form.get("MessageSid") || "");
   const messageStatus = String(form.get("MessageStatus") || "");
@@ -51,3 +52,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withWriteTransaction(POSTHandler);

@@ -1,3 +1,4 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/src/server/http";
 import { createRequisition, getOperationsData, saveOperationsData } from "@/src/server/operations";
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ items: items.slice(0, pageSize) });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
 
@@ -35,3 +36,5 @@ export async function POST(request: NextRequest) {
   await saveOperationsData(data);
   return NextResponse.json(requisition);
 }
+
+export const POST = withWriteTransaction(POSTHandler);

@@ -4,6 +4,7 @@ import { CheckCircle, ClipboardList, Eye } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { apiRequest } from '../lib/api';
 import { notifyAction } from '../lib/notify';
+import { downloadDocument } from '../lib/documents';
 
 export default function Admissions() {
   const [search, setSearch] = useState('');
@@ -128,7 +129,7 @@ export default function Admissions() {
                       {submission.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{submission.submissionChannel || 'website'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{submission.submissionChannel || 'website'}{(submission.files || []).map((file: any) => file.id && <button key={file.id} className="block text-blue-700 underline" onClick={() => void downloadDocument(file.id, file.name || file.originalFilename).catch(error => notifyAction(error.message, 'error'))}>Download {file.name || file.originalFilename}</button>)}</td>
                 </tr>
               ))}
             </tbody>

@@ -13,13 +13,13 @@ typecheck:
 	npm run typecheck
 
 db-up:
-	docker compose up -d db
+	npm run db:up
 
 db-down:
-	docker compose down
+	npm run db:down
 
 db-migrate:
-	powershell -NoProfile -Command "$$env:DATABASE_URL=(Get-Content .env.docker | Where-Object { $$_ -like 'DATABASE_URL=*' } | ForEach-Object { $$_ -replace '^DATABASE_URL=', '' }).Trim('\\\"'); npm run db:migrate"
+	npm run db:migrate
 
 db-seed:
-	powershell -NoProfile -Command "$$env:DATABASE_URL=(Get-Content .env.docker | Where-Object { $$_ -like 'DATABASE_URL=*' } | ForEach-Object { $$_ -replace '^DATABASE_URL=', '' }).Trim('\\\"'); npm run db:seed"
+	npm run db:seed

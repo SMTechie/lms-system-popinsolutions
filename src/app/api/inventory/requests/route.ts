@@ -1,3 +1,4 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/src/server/http";
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(requests);
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
 
@@ -46,3 +47,5 @@ export async function POST(request: NextRequest) {
   await saveOperationsData(data);
   return NextResponse.json(entry);
 }
+
+export const POST = withWriteTransaction(POSTHandler);

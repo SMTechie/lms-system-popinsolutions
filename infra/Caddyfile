@@ -1,0 +1,12 @@
+{$PUBLIC_HOST:localhost} {
+  encode zstd gzip
+  request_body {
+    max_size 55MB
+  }
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    X-Frame-Options SAMEORIGIN
+  }
+  reverse_proxy web:3000
+}

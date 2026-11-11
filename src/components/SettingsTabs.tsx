@@ -241,7 +241,7 @@ export default function SettingsTabs() {
     try {
       const res = await apiRequest(`/integrations/marketing/test-connection`, { method: 'POST' });
       if (res.ok) notifyAction('Connection successful.', 'success');
-      else notifyAction(`Connection failed (status ${res.status}).`, 'warning');
+      else notifyAction(res.error || `Connection failed (status ${res.status}).`, 'warning');
     } catch (err: any) {
       notifyAction(err?.message || 'Connection failed.', 'error');
     }
@@ -249,8 +249,8 @@ export default function SettingsTabs() {
 
   const handleSendTestWebhook = async () => {
     try {
-      await apiRequest(`/integrations/marketing/send-test-webhook`, { method: 'POST' });
-      notifyAction('Test webhook queued.', 'success');
+      const result = await apiRequest(`/integrations/marketing/send-test-webhook`, { method: 'POST' });
+      notifyAction(result.ok ? 'Test webhook delivered.' : result.error || 'Webhook delivery failed.', result.ok ? 'success' : 'error');
     } catch (err: any) {
       notifyAction(err?.message || 'Webhook failed.', 'error');
     }

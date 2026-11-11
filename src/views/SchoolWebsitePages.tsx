@@ -36,7 +36,7 @@ function PublicForm({ type, site }: { type: 'appointment' | 'enquiry'; site: any
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '', startsAt: '' });
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [availability, setAvailability] = useState<any>({ days: [1, 2, 3, 4, 5], opens: '08:00', closes: '16:00', durationMinutes: 30 });
+  const [availability, setAvailability] = useState({ days: [1, 2, 3, 4, 5], opens: '08:00', closes: '16:00', durationMinutes: 30 });
   useEffect(() => { if (type === 'appointment') void apiRequest('/public/appointments', { auth: false }).then((response) => setAvailability((current) => response.businessHours || current)).catch(() => undefined); }, [type]);
   const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const availableDays = (availability.days || []).map((day: number) => dayLabels[day]).join(', ');

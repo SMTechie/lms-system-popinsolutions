@@ -56,7 +56,7 @@ export function getPermissionsForRole(role: string) {
     ];
   }
 
-  return ["operations:read", "inventory:read", "requisitions:read", "tickets:read", "store:read"];
+  return [];
 }
 
 export function getPermissionsForUser(user: Pick<User, "role">) {

@@ -1,8 +1,10 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/src/server/auth";
 import { prisma } from "@/src/server/prisma";
+import { rateLimit } from "@/src/server/accountSecurity";
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = await request.json();
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
@@ -12,8 +14,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Name, email and password are required." }, { status: 400 });
   }
 
-  if (password.length < 8) {
-    return NextResponse.json({ error: "Password must be at least 8 characters long." }, { status: 400 });
+  if (password.length < 12 || password.length > 128) {
+    return NextResponse.json({ error: "Use a password of 12 to 128 characters." }, { status: 400 });
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -41,4 +43,10 @@ export async function POST(request: NextRequest) {
       role: user.role
     }
   });
+}
+
+const saveSignup = withWriteTransaction(POSTHandler);
+export async function POST(request: NextRequest) {
+  if (!await rateLimit(`signup:${request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown"}`, 10, 60)) return NextResponse.json({ error: "Too many registrations. Please try again later." }, { status: 429 });
+  return saveSignup(request);
 }

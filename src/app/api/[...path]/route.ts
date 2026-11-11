@@ -1,3 +1,10 @@
+import { markExtractedAnswers, processQueuedScripts } from "@/src/server/assessmentProcessing";
+import { syncDirectory } from "@/src/server/directorySync";
+import { encryptSecret } from "@/src/server/secrets";
+import { rateLimit } from "@/src/server/accountSecurity";
+import { timingSafeEqual } from "node:crypto";
+import { storeDocument } from "@/src/server/documents";
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildAnalyticsSnapshot,
@@ -30,26 +37,30 @@ import { prisma } from "@/src/server/prisma";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 import { appendAuditLog, getSetting, putSetting } from "@/src/server/settings";
 import { hasPermission } from "@/src/server/permissions";
+import { transitionOrder } from "@/src/server/orders";
+import { addTeacherNotification, assignedTeacherEmail, isNotificationRecipient, isTeacherRecipient, markNotificationReadForUser, notificationForUser, notificationsForUser } from "@/src/server/notifications";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
+  // The student hostel view can issue an initial access pass.
+  if ((await context.params).path[0] === "student") return withWriteTransaction(handle)(request, context);
   return handle(request, context);
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
   return handle(request, context);
 }
 
-export async function PUT(request: NextRequest, context: RouteContext) {
+async function PUTHandler(request: NextRequest, context: RouteContext) {
   return handle(request, context);
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+async function PATCHHandler(request: NextRequest, context: RouteContext) {
   return handle(request, context);
 }
 
-export async function DELETE(request: NextRequest, context: RouteContext) {
+async function DELETEHandler(request: NextRequest, context: RouteContext) {
   return handle(request, context);
 }
 
@@ -59,27 +70,47 @@ async function handle(request: NextRequest, { params }: RouteContext) {
   const method = request.method;
   const data = await getPortalData();
   const operations = await getOperationsData();
+  if (route === "jobs/run" && method === "POST") {
+    const configured = process.env.JOBS_SECRET || "";
+    const supplied = request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
+    if (configured.length < 24 || configured.length !== supplied.length || !timingSafeEqual(Buffer.from(configured), Buffer.from(supplied))) return json({ error: "Unauthorized" }, 401);
+    ensureCommunicationsData(data);
+    let processed = 0;
+    for (const campaign of data.communications.campaigns.filter((item: any) => ["SCHEDULED", "RETRY"].includes(item.status) && new Date(item.nextAttemptAt || item.scheduledFor).getTime() <= Date.now()).slice(0, 5)) {
+      await deliverCampaign(data, campaign, { id: "scheduler", email: "scheduler" });
+      processed += 1;
+    }
+    await savePortalData(data);
+    await processQueuedScripts(data);
+    await savePortalData(data);
+    await prisma.oAuthState.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    await prisma.rateLimit.deleteMany({ where: { resetAt: { lt: new Date(Date.now() - 86400000) } } });
+    await prisma.authChallenge.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 86400000) } } });
+    await putSetting("worker-health", { lastRunAt: new Date().toISOString(), processed });
+    return json({ processed });
+  }
   const publicRoute =
     (path[0] === "applications" && path[1] === "new") ||
     (path[0] === "public" && ["appointments", "enquiries", "newsletter"].includes(path[1] || ""));
   const user = publicRoute ? null : await requireCurrentUserFromHeader(request.headers.get("authorization")).catch(() => null);
+  if (publicRoute && method !== "GET" && !await rateLimit(`public:${request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown"}`, 30, 60)) return json({ error: "Too many submissions. Please try again later." }, 429);
 
   if (!publicRoute && !user) {
     return json({ error: "Unauthorized" }, 401);
   }
 
   try {
-    if (path[0] === "public") return handlePublic(request, method, path, data);
-    if (path[0] === "admin") return handleAdmin(request, method, path, data, operations, user);
-    if (path[0] === "boards") return handleBoards(request, method, path, data, operations, user);
-    if (path[0] === "parent") return handleParent(request, method, path, data, user);
-    if (path[0] === "teacher") return handleTeacher(request, method, path, data, operations, user);
-    if (path[0] === "student") return handleStudent(request, method, path, data, user);
-    if (path[0] === "teacher-assistant") return handleTeacherAssistant(request, method, path, data, user);
-    if (path[0] === "students") return handleStudents(request, method, path, data, user);
-    if (path[0] === "hostel") return handleHostel(request, method, path, data, user);
-    if (path[0] === "applications") return handleApplications(request, method, path, data, user);
-    if (path[0] === "identity") return handleIdentity(request, method, path, data, user);
+    if (path[0] === "public") return await handlePublic(request, method, path, data);
+    if (path[0] === "admin") return await handleAdmin(request, method, path, data, operations, user);
+    if (path[0] === "boards") return await handleBoards(request, method, path, data, operations, user);
+    if (path[0] === "parent") return await handleParent(request, method, path, data, user);
+    if (path[0] === "teacher") return await handleTeacher(request, method, path, data, operations, user);
+    if (path[0] === "student") return await handleStudent(request, method, path, data, user);
+    if (path[0] === "teacher-assistant") return await handleTeacherAssistant(request, method, path, data, user);
+    if (path[0] === "students") return await handleStudents(request, method, path, data, user);
+    if (path[0] === "hostel") return await handleHostel(request, method, path, data, user);
+    if (path[0] === "applications") return await handleApplications(request, method, path, data, user);
+    if (path[0] === "identity") return await handleIdentity(request, method, path, data, user);
   } catch (error: any) {
     return json({ error: error.message || "Portal request failed" }, 400);
   }
@@ -226,7 +257,7 @@ function ensureCommunicationsData(data: any) {
   if (!data.communications.audiences.length) {
     data.communications.audiences = [
       {
-        id: uid("audience"),
+        id: "audience-all-families",
         name: "All families",
         type: "SYSTEM",
         filters: { roles: ["PARENT"], grades: [], classes: [], languages: [] },
@@ -236,13 +267,22 @@ function ensureCommunicationsData(data: any) {
         ),
       },
       {
-        id: uid("audience"),
+        id: "audience-all-learners",
         name: "All learners",
         type: "SYSTEM",
         filters: { roles: ["STUDENT"], grades: [], classes: [], languages: [] },
         memberCount: data.learners.length,
       },
     ];
+  }
+  if (!data.communications.audiences.some((item: any) => item.id === "audience-all-teachers")) {
+    data.communications.audiences.push({
+      id: "audience-all-teachers",
+      name: "All teachers",
+      type: "SYSTEM",
+      filters: { roles: ["TEACHER"], grades: [], classes: [], languages: [] },
+      memberCount: 0,
+    });
   }
 }
 
@@ -320,7 +360,7 @@ function publicCommunicationProviders(providers: any) {
   };
 }
 
-function resolveAudienceRecipients(data: any, audienceId: string | null) {
+async function resolveAudienceRecipients(data: any, audienceId: string | null) {
   const audience = (data.communications?.audiences || []).find((item: any) => item.id === audienceId) || null;
   if (!audience) return [];
   const roleSet = new Set<string>(audience.filters?.roles || []);
@@ -328,8 +368,10 @@ function resolveAudienceRecipients(data: any, audienceId: string | null) {
 
   if (!roleSet.size || roleSet.has("PARENT")) {
     for (const learner of data.learners || []) {
+      if (audience.filters?.grades?.length && !audience.filters.grades.includes(learner.gradeId)) continue;
+      if (audience.filters?.classes?.length && !audience.filters.classes.includes(learner.classId)) continue;
       for (const link of learner.guardians || []) {
-        if (link.guardian?.email) {
+        if (link.guardian?.email && link.receiveAnnouncements !== false && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status)) {
           recipients.push({
             role: "PARENT",
             email: String(link.guardian.email).toLowerCase(),
@@ -346,8 +388,23 @@ function resolveAudienceRecipients(data: any, audienceId: string | null) {
     }
   }
 
+  if (roleSet.has("TEACHER")) {
+    const teachers = await prisma.user.findMany({ where: { role: "TEACHER", registrationStatus: "APPROVED" } });
+    for (const teacher of teachers) {
+      const scopedClasses = (data.classes || []).filter((item: any) =>
+        item.teacherEmail?.toLowerCase() === teacher.email.toLowerCase() &&
+        (!audience.filters?.grades?.length || audience.filters.grades.includes(item.gradeId)) &&
+        (!audience.filters?.classes?.length || audience.filters.classes.includes(item.id)),
+      );
+      if ((audience.filters?.grades?.length || audience.filters?.classes?.length) && !scopedClasses.length) continue;
+      recipients.push({ role: "TEACHER", email: teacher.email.toLowerCase(), name: teacher.name || teacher.email });
+    }
+  }
+
   if (roleSet.has("STUDENT")) {
     for (const learner of data.learners || []) {
+      if (audience.filters?.grades?.length && !audience.filters.grades.includes(learner.gradeId)) continue;
+      if (audience.filters?.classes?.length && !audience.filters.classes.includes(learner.classId)) continue;
       if (learner.email) {
         recipients.push({
           role: "STUDENT",
@@ -387,9 +444,10 @@ function applyPaymentToFee(data: any, payment: any) {
 async function deliverCampaign(data: any, campaign: any, actor: any) {
   ensureCommunicationsData(data);
   const providers = await getSetting("communication-providers", defaultCommunicationProviders());
-  const recipients = resolveAudienceRecipients(data, campaign.audienceId);
+  const recipients = await resolveAudienceRecipients(data, campaign.audienceId);
   const now = new Date().toISOString();
   const logs: any[] = [];
+  const alreadyDelivered = (recipient: any, channel: string) => data.communications.deliveryLogs.some((log: any) => log.campaignId === campaign.id && log.channel === channel && log.recipientRole === recipient.role && [recipient.email, recipient.phone].includes(log.recipient) && log.status === "DELIVERED");
   let delivered = 0;
   let failed = 0;
 
@@ -401,6 +459,7 @@ async function deliverCampaign(data: any, campaign: any, actor: any) {
       schoolName: "POPIN School",
     });
     for (const recipient of recipients) {
+      if (alreadyDelivered(recipient, "EMAIL")) { delivered += 1; continue; }
       const result = await sendTransactionalEmail({
         to: recipient.email,
         subject: emailTemplate.subject,
@@ -409,7 +468,7 @@ async function deliverCampaign(data: any, campaign: any, actor: any) {
       });
       const status = result.ok ? "DELIVERED" : result.skipped ? "SKIPPED" : "FAILED";
       if (result.ok) delivered += 1;
-      if (!result.ok && !result.skipped) failed += 1;
+      if (!result.ok) failed += 1;
       logs.push({
         id: uid("delivery-log"),
         campaignId: campaign.id,
@@ -430,6 +489,7 @@ async function deliverCampaign(data: any, campaign: any, actor: any) {
 
   for (const channel of (campaign.channels || []).filter((item: string) => item !== "EMAIL")) {
     for (const recipient of recipients) {
+      if (alreadyDelivered(recipient, channel)) { delivered += 1; continue; }
       if (channel === "SMS" || channel === "WHATSAPP") {
         const providerConfig = channel === "SMS" ? providers.sms || {} : providers.whatsapp || {};
         if (!recipient.phone) {
@@ -467,7 +527,7 @@ async function deliverCampaign(data: any, campaign: any, actor: any) {
             : { ok: false, skipped: true, error: `${channel} provider is not connected yet.` };
         const status = twilioResult.ok ? "DELIVERED" : twilioResult.skipped ? "SKIPPED" : "FAILED";
         if (twilioResult.ok) delivered += 1;
-        if (!twilioResult.ok && !twilioResult.skipped) failed += 1;
+        if (!twilioResult.ok) failed += 1;
         logs.push({
           id: uid("delivery-log"),
           campaignId: campaign.id,
@@ -506,18 +566,37 @@ async function deliverCampaign(data: any, campaign: any, actor: any) {
         openedAt: null,
         createdAt: now,
       });
-      if (channel === "APP") delivered += 1;
+      if (channel === "APP") {
+        const portal = recipient.role.toLowerCase();
+        data[portal] = data[portal] || {};
+        data[portal].notifications = data[portal].notifications || [];
+        data[portal].notifications.unshift({
+          id: uid("campaign-notification"),
+          campaignId: campaign.id,
+          recipientEmail: recipient.email,
+          recipientRole: recipient.role,
+          learnerId: recipient.learnerId || null,
+          type: "announcement",
+          title: campaign.title || campaign.subject || "School announcement",
+          message: campaign.content || "",
+          createdAt: now,
+          readAt: null,
+        });
+        delivered += 1;
+      }
     }
   }
 
   data.communications.deliveryLogs.unshift(...logs);
-  campaign.status = "SENT";
+  campaign.attempts = (campaign.attempts || 0) + 1;
+  campaign.status = failed ? (campaign.attempts >= 5 ? "FAILED" : "RETRY") : "SENT";
+  campaign.nextAttemptAt = failed ? new Date(Date.now() + Math.min(3600000, 60000 * 2 ** campaign.attempts)).toISOString() : null;
   campaign.sentAt = now;
   campaign.lastDeliveryAt = now;
   campaign.metrics = {
     recipients: recipients.length * Math.max((campaign.channels || []).length, 1),
     delivered,
-    opened: Math.max(Math.floor(delivered * 0.45), 0),
+    opened: data.communications.deliveryLogs.filter((log: any) => log.campaignId === campaign.id && log.openedAt).length,
     failed,
   };
 
@@ -656,8 +735,7 @@ function buildAdminAssistantResponse(data: any, prompt: string) {
 }
 
 async function handleAdmin(request: NextRequest, method: string, path: string[], data: any, operations: any, user: any) {
-  if (path[1] === "communications") ensureRole(user, ["ADMIN", "TEACHER"]);
-  else ensureRole(user, ["ADMIN"]);
+  ensureRole(user, ["ADMIN"]);
   if (path[1] === "enquiries") ensurePermission(user, "enquiries:read");
   if (path[1] === "appointments") ensurePermission(user, "appointments:manage");
   const users = await listAdminUsers();
@@ -745,7 +823,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     const password = String(body.password || "");
     const role = String(body.role || "TEACHER").toUpperCase();
     if (!name || !email || !password) return json({ error: "Name, email, and password are required." }, 400);
-    if (password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    if (password.length < 12 || password.length > 128) return json({ error: "Use a password of 12 to 128 characters." }, 400);
     if (!["ADMIN", "TEACHER", "PARENT", "STUDENT"].includes(role)) return json({ error: "Invalid user role." }, 400);
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return json({ error: "A user with this email already exists." }, 409);
@@ -908,6 +986,9 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     const providers = await getSetting("communication-providers", defaultCommunicationProviders());
 
     if (method === "GET" && path.length === 2) {
+      for (const audience of data.communications.audiences) {
+        audience.memberCount = (await resolveAudienceRecipients(data, audience.id)).length;
+      }
       const campaigns = [...data.communications.campaigns].sort((a: any, b: any) =>
         String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
       );
@@ -952,6 +1033,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
       const channels = requestedChannels.filter((channel: string) => availableChannels.includes(channel));
       if (!channels.length) return json({ error: "Select at least one configured communication channel." }, 400);
       const audience = data.communications.audiences.find((item: any) => item.id === body.audienceId) || null;
+      if (!audience) return json({ error: "Select a valid audience for this campaign." }, 400);
       const recipients = Number(audience?.memberCount || body.recipientCount || 0);
       const status = body.status || (body.scheduledFor ? "SCHEDULED" : "DRAFT");
       const campaign = {
@@ -963,16 +1045,17 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
         subject: String(body.subject || "").trim(),
         content: String(body.content || "").trim(),
         scheduledFor: body.scheduledFor || null,
-        sentAt: status === "SENT" ? new Date().toISOString() : null,
+        sentAt: null,
         createdAt: new Date().toISOString(),
         metrics: {
           recipients,
           delivered: status === "SENT" ? recipients : 0,
-          opened: status === "SENT" ? Math.max(Math.floor(recipients * 0.62), 0) : 0,
+          opened: 0,
           failed: 0,
         },
       };
       data.communications.campaigns.unshift(campaign);
+      if (status === "SENT") await deliverCampaign(data, campaign, user);
       await savePortalData(data);
       return json(campaign, 201);
     }
@@ -1280,6 +1363,12 @@ async function handleParent(request: NextRequest, method: string, path: string[]
   data.parent.reports = data.parent.reports || [];
   data.parent.messages = data.parent.messages || [];
   data.parent.notifications = data.parent.notifications || [];
+  const ownsRecord = (item: any) => user.role === "ADMIN" || (item.userId ? item.userId === user.id : String(item.parentEmail || data.parent.guardianEmail || "").toLowerCase() === parentEmail);
+  data.parent.profiles = data.parent.profiles || {};
+  const accountProfile = data.parent.profiles[user.id] || (data.parent.profiles[user.id] = {
+    profile: parentEmail === data.parent.guardianEmail?.toLowerCase() ? data.parent.profile || {} : {},
+    settings: {}, guardianName: user.name || "", guardianEmail: user.email,
+  });
   data.parent.profile = data.parent.profile || {};
   data.parent.settings = data.parent.settings || {};
   data.hostel = data.hostel || {};
@@ -1287,7 +1376,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
 
   if (method === "GET" && path.join("/") === "parent/children") {
     const links = data.learners.flatMap((learner: any) =>
-      (learner.guardians || []).map((link: any) => ({
+      (learner.guardians || []).filter((link: any) => !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status)).map((link: any) => ({
         learner,
         guardian: link.guardian,
         permissions: {
@@ -1312,10 +1401,10 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     return json(parentEmail ? links.filter((link: any) => link.guardian?.email?.toLowerCase() === parentEmail) : links);
   }
 
-  const learnerId = path[2];
+  const learnerId = path[1] === "children" ? path[2] : undefined;
   const learner = data.learners.find((item: any) => item.id === learnerId);
   const learnerLink = learner && parentEmail
-    ? (learner.guardians || []).find((link: any) => link.guardian?.email?.toLowerCase() === parentEmail)
+    ? (learner.guardians || []).find((link: any) => link.guardian?.email?.toLowerCase() === parentEmail && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status))
     : null;
   if (learnerId && !learner) return json({ error: "Learner not found" }, 404);
   if (learnerId && parentEmail) {
@@ -1341,7 +1430,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       homework: workItems.filter((item: any) => item.type === "HOMEWORK"),
       attendance,
       assessments: workItems.filter((item: any) => item.type === "ASSESSMENT"),
-      announcements: data.teacher.dashboard.announcements || [],
+      announcements: workItems.filter((item: any) => item.type === "ANNOUNCEMENT" && item.status === "PUBLISHED"),
       appointments,
       discipline,
       timetable: classes.flatMap((item: any) => (item.timetable || []).map((period: any) => ({ ...period, className: item.name }))),
@@ -1390,7 +1479,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
         paid: items.reduce((sum: number, item: any) => sum + Number(item.paidAmount || 0), 0),
         outstanding: items.reduce((sum: number, item: any) => sum + Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
       },
-      gateway: gateways.primary,
+      gateway: { enabled: gateways.primary?.enabled, provider: gateways.primary?.provider, publicKey: gateways.primary?.publicKey, currency: gateways.primary?.currency },
     });
   }
 
@@ -1398,10 +1487,13 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     if (!learnerLink?.payFees) return json({ error: "Fee payment is not enabled for this learner." }, 403);
     const body = await readBody(request);
     const paymentAmount = Number(body.amount || 0);
-    if (!paymentAmount) return json({ error: "Enter a payment amount." }, 400);
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) return json({ error: "Enter a payment amount." }, 400);
     const fee = (data.parent.fees || []).find((item: any) => item.id === body.feeId && item.learnerId === learnerId);
     if (!fee) return json({ error: "Fee record not found." }, 404);
+    const proof = body.proofDocumentId ? await prisma.document.findFirst({ where: { id: String(body.proofDocumentId), ownerId: user.id }, select: { id: true, name: true } }) : null;
+    if (body.proofDocumentId && !proof) return json({ error: "Proof document not found." }, 404);
     const payment = {
+      proofDocumentId: proof?.id || null,
       id: uid("payment"),
       learnerId,
       feeId: fee.id,
@@ -1573,7 +1665,14 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     const body = await readBody(request);
     const form = (data.applications.forms || []).find((item: any) => item.id === body.formId || item.slug === body.slug);
     if (!form || form.admissionsOpenState === "closed") return json({ error: "Application form is not available." }, 400);
-    const submission = { id: uid("submission"), submissionReference: `APP-${String((form.submissions || []).length + 1).padStart(4, "0")}`, status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "parent-portal", learnerId, guardianEmail: parentEmail || data.parent.guardianEmail || user.email, applicantName: learnerName(data, learnerId), formId: form.id, formName: form.name, answers: body.answers || {}, ...body };
+    if ((body.files || []).length > 10) return json({ error: "Upload at most 10 documents." }, 400);
+    const submissionId = uid("submission");
+    const files = [];
+    for (const file of body.files || []) {
+      const document = await storeDocument(user.id, { name: file.originalFilename, mimeType: file.mimeType, contentBase64: file.contentBase64 });
+      files.push({ ...document, fieldKey: file.fieldKey, originalFilename: document.name });
+    }
+    const submission = { learnerId, applicantName: learnerName(data, learnerId), guardianName: user.name, guardianEmail: user.email, guardianPhone: String(body.guardianPhone || ""), payload: body.payload || {}, files, id: submissionId, submissionReference: "APP-" + String((form.submissions || []).length + 1).padStart(4, "0"), status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "parent" };
     form.submissions = [submission, ...(form.submissions || [])];
     data.parent.notifications.unshift({ id: uid("parent-notification"), learnerId, type: "application", title: "Application submitted", message: `${form.name} was submitted for ${learnerName(data, learnerId)}.`, createdAt: new Date().toISOString(), readAt: null });
     await savePortalData(data);
@@ -1650,7 +1749,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     if (!learnerLink?.bookAppointments) return json({ error: "Appointments are not enabled for this learner." }, 403);
     return json(
       (data.parent.appointments || [])
-        .filter((item: any) => item.learnerId === learnerId)
+        .filter((item: any) => item.learnerId === learnerId && (!item.parentEmail || item.parentEmail.toLowerCase() === parentEmail || user.role === "ADMIN"))
         .sort((a: any, b: any) => String(a.startsAt).localeCompare(String(b.startsAt))),
     );
   }
@@ -1662,7 +1761,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       id: uid("appointment"),
       learnerId,
       teacherName: body.teacherName || "Assigned Teacher",
-      teacherEmail: body.teacherEmail || "teacher@popin.school",
+      teacherEmail: body.teacherEmail || assignedTeacherEmail(data, learnerId),
       title: body.title || "Parent meeting",
       startsAt: body.startsAt,
       endsAt: body.endsAt || body.startsAt,
@@ -1672,6 +1771,13 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       createdBy: "Parent",
     };
     data.parent.appointments.unshift(appointment);
+    addTeacherNotification(data, {
+      learnerId,
+      teacherEmail: appointment.teacherEmail,
+      type: "appointment",
+      title: "Parent appointment requested",
+      message: `${user.name || "A parent"} requested ${appointment.title} for ${learnerName(data, learnerId)}.`,
+    });
     data.parent.notifications.unshift({
       id: uid("parent-notification"),
       learnerId,
@@ -1689,7 +1795,8 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     const body = await readBody(request);
     const appointment = (data.parent.appointments || []).find((item: any) => item.id === path[4] && item.learnerId === learnerId);
     if (!appointment) return json({ error: "Appointment not found." }, 404);
-    Object.assign(appointment, body);
+    if (!learnerLink?.bookAppointments || body.status !== "CANCELLED") return json({ error: "Parents can cancel their booked appointments." }, 403);
+    appointment.status = "CANCELLED";
     await savePortalData(data);
     return json(appointment);
   }
@@ -1759,7 +1866,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     if (!learnerLink?.messageTeachers) return json({ error: "Messaging is not enabled for this learner." }, 403);
     return json(
       (data.parent.messages || [])
-        .filter((item: any) => item.learnerId === learnerId)
+        .filter((item: any) => item.learnerId === learnerId && (!item.parentEmail || item.parentEmail.toLowerCase() === parentEmail || user.role === "ADMIN"))
         .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
     );
   }
@@ -1771,6 +1878,8 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       id: uid("thread"),
       learnerId,
       subject: body.subject || "Parent message",
+      parentEmail: user.email,
+      teacherEmail: assignedTeacherEmail(data, learnerId),
       status: "OPEN",
       updatedAt: new Date().toISOString(),
       messages: [
@@ -1784,6 +1893,13 @@ async function handleParent(request: NextRequest, method: string, path: string[]
       ],
     };
     data.parent.messages.unshift(thread);
+    addTeacherNotification(data, {
+      learnerId,
+      teacherEmail: thread.teacherEmail,
+      type: "message",
+      title: "New parent message",
+      message: `${user.name || "A parent"} sent a message: ${thread.subject}.`,
+    });
     data.teacher.dashboard.parentQueries.unshift({
       id: uid("query"),
       learnerId,
@@ -1803,9 +1919,11 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     path[4] &&
     path[5] === "reply"
   ) {
+    if (!learnerLink?.messageTeachers && user.role !== "ADMIN") return json({ error: "Messaging is not enabled for this learner." }, 403);
     const body = await readBody(request);
-    const thread = (data.parent.messages || []).find((item: any) => item.id === path[4] && item.learnerId === learnerId);
+    const thread = (data.parent.messages || []).find((item: any) => item.id === path[4] && item.learnerId === learnerId && (!item.parentEmail || item.parentEmail.toLowerCase() === parentEmail || user.role === "ADMIN"));
     if (!thread) return json({ error: "Conversation not found." }, 404);
+    if (!String(body.message || "").trim()) return json({ error: "Enter a reply." }, 400);
     const reply = {
       id: uid("thread-message"),
       authorRole: "PARENT",
@@ -1816,33 +1934,44 @@ async function handleParent(request: NextRequest, method: string, path: string[]
     thread.messages.push(reply);
     thread.updatedAt = reply.createdAt;
     thread.status = "OPEN";
+    addTeacherNotification(data, {
+      learnerId,
+      teacherEmail: thread.teacherEmail || assignedTeacherEmail(data, learnerId),
+      type: "message",
+      title: "Parent reply received",
+      message: `${user.name || "A parent"} replied to ${thread.subject}.`,
+    });
     await savePortalData(data);
     return json(reply, 201);
   }
 
   if (method === "GET" && path.join("/") === "parent/orders") {
     return json(
-      (data.parent.orders || []).filter(() => !parentEmail || data.parent.guardianEmail?.toLowerCase() === parentEmail),
+      [...await prisma.storeOrder.findMany({ where: user.role === "ADMIN" ? {} : { userId: user.id }, orderBy: { createdAt: "desc" } }), ...(data.parent.orders || []).filter(ownsRecord)],
     );
   }
 
   if (method === "PATCH" && path[1] === "orders" && path[2]) {
     const body = await readBody(request);
-    const order = (data.parent.orders || []).find((item: any) => item.id === path[2]);
+    if (await prisma.storeOrder.findUnique({ where: { id: path[2] } })) return json(await transitionOrder(path[2], user, body.status, body.reference));
+    const order = (data.parent.orders || []).find((item: any) => item.id === path[2] && ownsRecord(item));
     if (!order) return json({ error: "Order not found." }, 404);
-    Object.assign(order, body);
+    if (body.status !== "COLLECTED" || order.status !== "READY_FOR_COLLECTION") return json({ error: "Only orders ready for collection can be collected." }, 409);
+    order.status = "COLLECTED";
+    order.collectedAt = new Date().toISOString();
     await savePortalData(data);
     return json(order);
   }
 
   if (method === "GET" && path.join("/") === "parent/tickets") {
-    return json((data.parent.tickets || []).sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    return json((data.parent.tickets || []).filter(ownsRecord).sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt))));
   }
 
   if (method === "POST" && path.join("/") === "parent/tickets") {
     const body = await readBody(request);
     const ticket = {
       id: uid("parent-ticket"),
+      userId: user.id, parentEmail: user.email,
       learnerId: body.learnerId || null,
       title: body.title || "Support request",
       category: body.category || "General",
@@ -1867,7 +1996,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
 
   if (method === "POST" && path[1] === "tickets" && path[2] && path[3] === "replies") {
     const body = await readBody(request);
-    const ticket = (data.parent.tickets || []).find((item: any) => item.id === path[2]);
+    const ticket = (data.parent.tickets || []).find((item: any) => item.id === path[2] && ownsRecord(item));
     if (!ticket) return json({ error: "Ticket not found." }, 404);
     const reply = {
       id: uid("ticket-reply"),
@@ -1883,52 +2012,41 @@ async function handleParent(request: NextRequest, method: string, path: string[]
 
   if (method === "PATCH" && path[1] === "tickets" && path[2]) {
     const body = await readBody(request);
-    const ticket = (data.parent.tickets || []).find((item: any) => item.id === path[2]);
+    const ticket = (data.parent.tickets || []).find((item: any) => item.id === path[2] && ownsRecord(item));
     if (!ticket) return json({ error: "Ticket not found." }, 404);
-    Object.assign(ticket, body);
+    if (!["OPEN", "CLOSED"].includes(body.status)) return json({ error: "Choose OPEN or CLOSED." }, 400);
+    ticket.status = body.status;
     await savePortalData(data);
     return json(ticket);
   }
 
   if (method === "GET" && path.join("/") === "parent/notifications") {
-    return json((data.parent.notifications || []).sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    return json(notificationsForUser(data, user, "PARENT"));
   }
 
   if (method === "POST" && path.join("/") === "parent/notifications/read-all") {
-    data.parent.notifications = (data.parent.notifications || []).map((item: any) => ({ ...item, readAt: item.readAt || new Date().toISOString() }));
+    data.parent.notifications.filter((item: any) => isNotificationRecipient(data, user, item, "PARENT")).forEach((item: any) => markNotificationReadForUser(item, user));
     await savePortalData(data);
-    return json(data.parent.notifications);
+    return json(notificationsForUser(data, user, "PARENT"));
   }
 
   if (method === "POST" && path[1] === "notifications" && path[2] && path[3] === "read") {
-    const notification = (data.parent.notifications || []).find((item: any) => item.id === path[2]);
+    const notification = data.parent.notifications.find((item: any) => item.id === path[2] && isNotificationRecipient(data, user, item, "PARENT"));
     if (!notification) return json({ error: "Notification not found." }, 404);
-    notification.readAt = new Date().toISOString();
+    markNotificationReadForUser(notification, user);
     await savePortalData(data);
-    return json(notification);
+    return json(notificationsForUser(data, user, "PARENT").find((item: any) => item.id === notification.id));
   }
 
-  if (method === "GET" && path.join("/") === "parent/profile") {
-    return json({
-      profile: data.parent.profile,
-      settings: data.parent.settings,
-      guardianName: data.parent.guardianName || user.name || "",
-      guardianEmail: data.parent.guardianEmail || user.email,
-    });
-  }
-
-  if (method === "PATCH" && path.join("/") === "parent/profile") {
-    const body = await readBody(request);
-    data.parent.profile = { ...(data.parent.profile || {}), ...(body.profile || {}) };
-    data.parent.settings = { ...(data.parent.settings || {}), ...(body.settings || {}) };
-    if (body.guardianName) data.parent.guardianName = body.guardianName;
-    await savePortalData(data);
-    return json({
-      profile: data.parent.profile,
-      settings: data.parent.settings,
-      guardianName: data.parent.guardianName || user.name || "",
-      guardianEmail: data.parent.guardianEmail || user.email,
-    });
+  if (path.join("/") === "parent/profile") {
+    if (method === "PATCH") {
+      const body = await readBody(request);
+      accountProfile.profile = { ...accountProfile.profile, ...(body.profile || {}) };
+      accountProfile.settings = { ...accountProfile.settings, ...(body.settings || {}) };
+      if (typeof body.guardianName === "string") accountProfile.guardianName = body.guardianName.trim();
+      await savePortalData(data);
+    }
+    if (["GET", "PATCH"].includes(method)) return json(accountProfile);
   }
 
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
@@ -1947,8 +2065,17 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   const teacherClasses = user.role === "ADMIN"
     ? data.classes
     : data.classes.filter((item: any) => item.teacherEmail?.toLowerCase() === user.email?.toLowerCase());
+  for (const schoolClass of teacherClasses) {
+    const rosterIds = new Set((schoolClass.learners || []).map((item: any) => item.id));
+    schoolClass.learners = (data.learners || []).filter((learner: any) => learner.classId ? learner.classId === schoolClass.id : rosterIds.has(learner.id));
+    schoolClass.assignments = schoolClass.assignments || [];
+    schoolClass.timetable = schoolClass.timetable || [];
+    schoolClass.workItems = schoolClass.workItems || [];
+    schoolClass.grade = schoolClass.grade || (data.grades || []).find((grade: any) => grade.id === schoolClass.gradeId);
+  }
   if (method === "GET" && path.join("/") === "teacher/dashboard") {
     const parentQueries = (data.parent?.messages || [])
+      .filter((thread: any) => isTeacherRecipient(data, user, thread))
       .filter((thread: any) => thread.status !== "CLOSED")
       .map((thread: any) => ({
         id: thread.id,
@@ -1956,7 +2083,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
         subject: thread.subject,
         status: thread.status,
         teacherName: thread.teacherName || "Assigned Teacher",
-        teacherEmail: thread.teacherEmail || "teacher@popin.school",
+        teacherEmail: thread.teacherEmail || assignedTeacherEmail(data, thread.learnerId),
         learnerName: learnerName(data, thread.learnerId),
         updatedAt: thread.updatedAt,
         message: thread.messages?.[thread.messages.length - 1]?.message || "",
@@ -1968,7 +2095,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     );
     const appointmentRequests = (data.parent?.appointments || []).filter(
       (item: any) =>
-        (item.teacherEmail || "teacher@popin.school").toLowerCase() === user.email?.toLowerCase(),
+        isTeacherRecipient(data, user, item),
     );
     data.teacher.dashboard.parentQueries = parentQueries;
     data.teacher.dashboard.requisitions = requisitions;
@@ -2047,11 +2174,18 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
     await savePortalData(data);
     return json(event, 201);
   }
-  if (method === "GET" && path.join("/") === "teacher/notifications") return json(data.teacher.notifications);
+  if (method === "GET" && path.join("/") === "teacher/notifications") return json(notificationsForUser(data, user, "TEACHER"));
   if (method === "POST" && path.join("/") === "teacher/notifications/read-all") {
-    data.teacher.notifications.forEach((item: any) => { item.readAt = item.readAt || new Date().toISOString(); });
+    data.teacher.notifications.filter((item: any) => isNotificationRecipient(data, user, item, "TEACHER")).forEach((item: any) => markNotificationReadForUser(item, user));
     await savePortalData(data);
-    return json(data.teacher.notifications);
+    return json(notificationsForUser(data, user, "TEACHER"));
+  }
+  if (method === "POST" && path[1] === "notifications" && path[2] && path[3] === "read") {
+    const notification = data.teacher.notifications.find((item: any) => item.id === path[2] && isNotificationRecipient(data, user, item, "TEACHER"));
+    if (!notification) return json({ error: "Notification not found." }, 404);
+    markNotificationReadForUser(notification, user);
+    await savePortalData(data);
+    return json(notificationsForUser(data, user, "TEACHER").find((item: any) => item.id === notification.id));
   }
   if (method === "GET" && path.join("/") === "teacher/gradebook") {
     const assessments = teacherClasses.flatMap((schoolClass: any) => (schoolClass.workItems || []).filter((item: any) => item.type === "ASSESSMENT").map((item: any) => ({ ...item, classId: schoolClass.id, className: schoolClass.name, learners: schoolClass.learners || [] })));
@@ -2070,19 +2204,51 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   if (method === "GET" && path.join("/") === "teacher/messages") {
     return json(
       (data.parent?.messages || [])
-        .filter((thread: any) => (thread.teacherEmail || "teacher@popin.school").toLowerCase() === user.email?.toLowerCase())
+        .filter((thread: any) => isTeacherRecipient(data, user, thread))
+        .map((thread: any) => ({ ...thread, learnerName: learnerName(data, thread.learnerId) }))
         .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
     );
   }
+  if (method === "POST" && path.join("/") === "teacher/messages") {
+    const body = await readBody(request);
+    const learner = teacherClasses.flatMap((item: any) => item.learners).find((item: any) => item.id === body.learnerId);
+    if (!learner) return json({ error: "Learner not found in your assigned classes." }, 404);
+    const subject = String(body.subject || "").trim();
+    const message = String(body.message || "").trim();
+    if (!subject || !message) return json({ error: "Enter a subject and message." }, 400);
+    if (!(learner.guardians || []).some((link: any) => link.guardian?.email && link.messageTeachers !== false && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status))) {
+      return json({ error: "No linked guardian is available for this learner's messages." }, 400);
+    }
+    const now = new Date().toISOString();
+    const thread = {
+      id: uid("thread"), learnerId: learner.id, subject, teacherEmail: user.email, teacherName: user.name || user.email,
+      status: "OPEN", updatedAt: now,
+      messages: [{ id: uid("thread-message"), authorRole: "TEACHER", authorName: user.name || user.email, message, createdAt: now }],
+    };
+    data.parent = data.parent || {};
+    data.parent.messages = data.parent.messages || [];
+    data.parent.messages.unshift(thread);
+    data.parent.notifications = data.parent.notifications || [];
+    const recipientEmails = (learner.guardians || []).filter((link: any) => link.guardian?.email && link.messageTeachers !== false && !["REVOKED", "REJECTED", "INACTIVE", "UNLINKED"].includes(link.status)).map((link: any) => link.guardian.email);
+    data.parent.notifications.unshift({
+      id: uid("parent-notification"), learnerId: learner.id, recipientEmails, recipientRole: "PARENT", type: "message",
+      title: "New teacher message", message: `${user.name || "Your teacher"} sent a message: ${subject}.`, createdAt: now, readAt: null,
+    });
+    await savePortalData(data);
+    return json({ ...thread, learnerName: learnerName(data, learner.id) }, 201);
+  }
   if (method === "POST" && path[1] === "messages" && path[2] && path[3] === "reply") {
     const body = await readBody(request);
-    const thread = (data.parent?.messages || []).find((item: any) => item.id === path[2]);
+    const thread = (data.parent?.messages || []).find((item: any) => item.id === path[2] && isTeacherRecipient(data, user, item));
     if (!thread) return json({ error: "Conversation not found." }, 404);
+    const message = String(body.message || "").trim();
+    if (!message) return json({ error: "Enter a reply before sending." }, 400);
+    if (thread.status === "CLOSED") return json({ error: "Reopen the conversation before replying." }, 409);
     const reply = {
       id: uid("thread-message"),
       authorRole: "TEACHER",
       authorName: user.name || user.email,
-      message: body.message || "",
+      message,
       createdAt: new Date().toISOString(),
     };
     thread.teacherName = user.name || thread.teacherName || "Assigned Teacher";
@@ -2096,6 +2262,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
       learnerId: thread.learnerId,
       type: "message",
       title: "Teacher reply received",
+      recipientEmail: thread.parentEmail || null,
       message: `${user.name || "Your teacher"} replied to your message about ${learnerName(data, thread.learnerId)}.`,
       createdAt: new Date().toISOString(),
       readAt: null,
@@ -2105,9 +2272,10 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   }
   if (method === "PATCH" && path[1] === "messages" && path[2] && path[3] === "status") {
     const body = await readBody(request);
-    const thread = (data.parent?.messages || []).find((item: any) => item.id === path[2]);
+    const thread = (data.parent?.messages || []).find((item: any) => item.id === path[2] && isTeacherRecipient(data, user, item));
     if (!thread) return json({ error: "Conversation not found." }, 404);
-    thread.status = body.status || thread.status;
+    if (!["OPEN", "ANSWERED", "CLOSED"].includes(body.status)) return json({ error: "Select a valid conversation status." }, 400);
+    thread.status = body.status;
     thread.updatedAt = new Date().toISOString();
     await savePortalData(data);
     return json(thread);
@@ -2159,7 +2327,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   if (method === "GET" && path.join("/") === "teacher/appointments") {
     return json(
       (data.parent?.appointments || [])
-        .filter((item: any) => (item.teacherEmail || "teacher@popin.school").toLowerCase() === user.email?.toLowerCase())
+        .filter((item: any) => isTeacherRecipient(data, user, item))
         .sort((a: any, b: any) => String(a.startsAt).localeCompare(String(b.startsAt))),
     );
   }
@@ -2252,7 +2420,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
   }
   if (method === "PATCH" && path[1] === "appointments" && path[2]) {
     const body = await readBody(request);
-    const appointment = (data.parent?.appointments || []).find((item: any) => item.id === path[2]);
+    const appointment = (data.parent?.appointments || []).find((item: any) => item.id === path[2] && isTeacherRecipient(data, user, item));
     if (!appointment) return json({ error: "Appointment not found." }, 404);
     Object.assign(appointment, body, {
       teacherName: user.name || appointment.teacherName || "Assigned Teacher",
@@ -2274,16 +2442,45 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
 
   if (method === "POST" && path.join("/") === "teacher/work-items") {
     const body = await readBody(request);
-    const workItem = { id: uid("work"), ...body, createdAt: new Date().toISOString() };
+    const title = String(body.title || "").trim();
+    if (!title || !["HOMEWORK", "LESSON_PLAN", "ANNOUNCEMENT", "ASSESSMENT"].includes(body.type)) return json({ error: "Select an item type and enter a title." }, 400);
+    const workItem = { ...body, id: uid("work"), title, createdAt: new Date().toISOString() };
     const targetClasses = body.classId ? teacherClasses.filter((item: any) => item.id === body.classId) : teacherClasses;
+    if (!targetClasses.length) return json({ error: "Class not found." }, 404);
     targetClasses.forEach((item: any) => item.workItems.unshift(workItem));
+    if (workItem.visibleToParents !== false && ["ANNOUNCEMENT", "HOMEWORK", "ASSESSMENT"].includes(workItem.type) && workItem.status === "PUBLISHED") {
+      data.parent = data.parent || {};
+      data.parent.notifications = data.parent.notifications || [];
+      const learnerIds = new Set<string>(targetClasses.flatMap((item: any) => (item.learners || []).map((learner: any) => learner.id)));
+      for (const learnerId of learnerIds) {
+        data.parent.notifications.unshift({
+          id: uid("parent-notification"), learnerId, type: workItem.type.toLowerCase(),
+          title: workItem.type === "ANNOUNCEMENT" ? "Class announcement" : "New class work published",
+          message: workItem.title || "Your learner's teacher published an update.", createdAt: new Date().toISOString(), readAt: null,
+        });
+      }
+    }
     data.teacher.dashboard.announcements = body.type === "ANNOUNCEMENT" ? [workItem, ...(data.teacher.dashboard.announcements || [])] : data.teacher.dashboard.announcements;
     await savePortalData(data);
     return json(workItem, 201);
   }
 
+  if (method === "GET" && path.join("/") === "teacher/attendance") {
+    const classId = request.nextUrl.searchParams.get("classId");
+    const schoolClass = teacherClasses.find((item: any) => item.id === classId);
+    if (!schoolClass) return json({ error: "Class not found." }, 404);
+    const registerDate = request.nextUrl.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+    const learnerIds = new Set(schoolClass.learners.map((item: any) => item.id));
+    return json((data.parent?.attendance || []).filter((item: any) => learnerIds.has(item.learnerId) && item.date === registerDate));
+  }
   if (method === "POST" && path.join("/") === "teacher/attendance") {
     const body = await readBody(request);
+    const schoolClass = teacherClasses.find((item: any) => item.id === body.classId);
+    if (!schoolClass) return json({ error: "Class not found." }, 404);
+    const learnerIds = new Set(schoolClass.learners.map((item: any) => item.id));
+    if (!Array.isArray(body.entries) || !body.entries.length || body.entries.some((entry: any) => !learnerIds.has(entry.learnerId) || !["PRESENT", "ABSENT", "LATE", "EXCUSED"].includes(entry.status))) {
+      return json({ error: "Enter valid attendance for learners in this class." }, 400);
+    }
     const registerDate = String(body.registerDate || new Date().toISOString()).slice(0, 10);
     data.parent = data.parent || {};
     data.parent.attendance = data.parent.attendance || [];
@@ -2291,9 +2488,9 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
       const existing = data.parent.attendance.find((item: any) => item.learnerId === entry.learnerId && item.date === registerDate);
       if (existing) {
         existing.status = entry.status;
-        existing.note = entry.note || existing.note || "";
+        existing.note = String(entry.note || "");
         existing.capturedBy = user.name || user.email;
-        existing.submittedAt = new Date().toISOString();
+        existing.submittedAt = body.submit ? new Date().toISOString() : null;
         continue;
       }
       data.parent.attendance.unshift({
@@ -2303,7 +2500,7 @@ async function handleTeacher(request: NextRequest, method: string, path: string[
         status: entry.status,
         note: entry.note || "",
         capturedBy: user.name || user.email,
-        submittedAt: new Date().toISOString(),
+        submittedAt: body.submit ? new Date().toISOString() : null,
       });
     }
     if (body.submit) {
@@ -2361,11 +2558,13 @@ async function handleStudent(request: NextRequest, method: string, path: string[
   const grades = workItems.filter((item: any) => item.type === "ASSESSMENT").flatMap((assessment: any) =>
     (data.teacher?.gradebook?.[assessment.id] || []).filter((entry: any) => entry.learnerId === learner.id).map((entry: any) => ({ ...entry, assessmentId: assessment.id, assessmentTitle: assessment.title })),
   );
-  const notifications = [
-    ...((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id)),
+  const studentNotificationSources = [
+    ...((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id && !item.recipientRole && !item.recipientEmail)),
     ...((data.notifications || []).filter((item: any) => item.type === "announcement" || item.type === "approval")),
+    ...((data.student?.notifications || []).filter((item: any) => isNotificationRecipient(data, user, item, "STUDENT"))),
   ]
     .sort((a: any, b: any) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
+  const notifications = studentNotificationSources.map((item: any) => notificationForUser(item, user));
   ensureCommunicationsData(data);
 
   if (method === "GET" && path.join("/") === "student/overview") {
@@ -2435,24 +2634,17 @@ async function handleStudent(request: NextRequest, method: string, path: string[
   }
 
   if (method === "POST" && path[1] === "notifications" && path[2] && path[3] === "read") {
-    const notification = (data.parent?.notifications || []).find((item: any) => item.id === path[2] && item.learnerId === learner.id) ||
-      (data.notifications || []).find((item: any) => item.id === path[2] && ["announcement", "approval"].includes(item.type));
+    const notification = studentNotificationSources.find((item: any) => item.id === path[2]);
     if (!notification) return json({ error: "Notification not found." }, 404);
-    notification.readAt = notification.readAt || new Date().toISOString();
+    markNotificationReadForUser(notification, user);
     await savePortalData(data);
-    return json(notification);
+    return json(notificationForUser(notification, user));
   }
 
   if (method === "POST" && path.join("/") === "student/notifications/read-all") {
-    for (const item of data.parent?.notifications || []) {
-      if (item.learnerId === learner.id) item.readAt = item.readAt || new Date().toISOString();
-    }
+    studentNotificationSources.forEach((item: any) => markNotificationReadForUser(item, user));
     await savePortalData(data);
-    return json(
-      ((data.parent?.notifications || []).filter((item: any) => item.learnerId === learner.id)).sort((a: any, b: any) =>
-        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
-      ),
-    );
+    return json(studentNotificationSources.map((item: any) => notificationForUser(item, user)));
   }
 
   if (method === "POST" && path[1] === "work-items" && path[2] && path[3] === "submissions") {
@@ -2472,7 +2664,8 @@ async function handleStudent(request: NextRequest, method: string, path: string[
 
 async function handleTeacherAssistant(request: NextRequest, method: string, path: string[], data: any, user: any) {
   ensureRole(user, ["ADMIN", "TEACHER"]);
-  const assessments = data.teacherAssistant.assessments;
+  const ownsAssessment = (assessment: any) => user.role === "ADMIN" || ((assessment.classIds || [assessment.classId]).filter(Boolean).length > 0 && (assessment.classIds || [assessment.classId]).every((id: string) => data.classes.some((item: any) => item.id === id && item.teacherEmail?.toLowerCase() === user.email.toLowerCase())));
+  const assessments = data.teacherAssistant.assessments.filter(ownsAssessment);
   if (method === "GET" && path.length === 1) {
     const scripts = assessments.flatMap((assessment: any) => assessment.scripts || []);
     return json({
@@ -2480,7 +2673,7 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
         scriptsWaiting: scripts.filter((script: any) => ["QUEUED", "OCR", "MARKING"].includes(script.status)).length,
         readyForReview: scripts.filter((script: any) => script.status === "READY_FOR_REVIEW").length,
         needsAttention: scripts.filter((script: any) => script.status === "NEEDS_REVIEW").length,
-        averageReviewSeconds: scripts.length ? 18 : 0,
+        averageReviewSeconds: null,
       },
       assessments,
     });
@@ -2491,7 +2684,8 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
   if (method === "POST" && path[1] === "assessments" && path.length === 2) {
     const body = await readBody(request);
     const assessment = { id: uid("assessment"), status: "DRAFT", counts: { total: 0, ready: 0, needsReview: 0 }, scripts: [], ...body };
-    assessments.unshift(assessment);
+    if (!ownsAssessment(assessment)) return json({ error: "Choose one of your assigned classes." }, 403);
+    data.teacherAssistant.assessments.unshift(assessment);
     await savePortalData(data);
     return json(assessment, 201);
   }
@@ -2513,7 +2707,12 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
     if (!assessment) return json({ error: "Assessment not found" }, 404);
     const body = await readBody(request);
     const scripts = Array.isArray(body.scripts) ? body.scripts : [];
-    const created = scripts.map((script: any) => {
+    if (!scripts.length || scripts.length > 10) return json({ error: "Upload between 1 and 10 scripts." }, 400);
+    const created = await Promise.all(scripts.map(async (script: any) => {
+      if ((script.originalFiles || []).length > 3) throw new Error("Upload at most three files per script.");
+      if (script.learnerId && !data.learners.some((learner: any) => learner.id === script.learnerId && (assessment.classIds || [assessment.classId]).includes(learner.classId))) throw new Error("Learner does not belong to this class.");
+      const originalFiles = [];
+      for (const file of script.originalFiles || []) originalFiles.push(await storeDocument(user.id, file));
       const results = (assessment.questions || []).map((question: any) => ({
         id: uid("result"),
         questionNumber: question.questionNumber,
@@ -2525,19 +2724,20 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
       }));
       return {
         id: uid("script"),
-        status: "READY_FOR_REVIEW",
+        status: script.extractedText ? "READY_FOR_REVIEW" : process.env.OCR_URL ? "QUEUED" : "NEEDS_REVIEW",
         learnerId: script.learnerId || null,
-        originalFiles: script.originalFiles || [],
+        originalFiles,
         extractedText: script.extractedText || "",
-        ocrConfidence: script.extractedText ? 0.94 : null,
+        ocrConfidence: null,
         markingConfidence: null,
         suggestedTotal: 0,
         finalTotal: 0,
-        flags: script.extractedText ? [] : ["Awaiting OCR text"],
+        flags: script.extractedText ? [] : ["Enter the script text and review marks manually."],
         results,
         createdAt: new Date().toISOString(),
       };
-    });
+    }));
+    for (const script of created) if (script.extractedText) markExtractedAnswers(assessment, script);
     assessment.scripts = [...created, ...(assessment.scripts || [])];
     updateAssessmentCounts(assessment);
     await savePortalData(data);
@@ -2546,7 +2746,13 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
   if (method === "PATCH" && path[1] === "scripts" && path[3] === "extracted-text") {
     const match = findAssistantScript(assessments, path[2]);
     if (!match) return json({ error: "Script not found" }, 404);
-    Object.assign(match.script, await readBody(request), { status: "READY_FOR_REVIEW", ocrConfidence: 0.94 });
+    const body = await readBody(request);
+    match.script.editableText = String(body.editableText || body.extractedText || "");
+    if (body.learnerId) {
+      if (!data.learners.some((learner: any) => learner.id === body.learnerId && (match.assessment.classIds || [match.assessment.classId]).includes(learner.classId))) return json({ error: "Learner does not belong to the assessment class." }, 400);
+      match.script.learnerId = body.learnerId;
+    }
+    markExtractedAnswers(match.assessment, match.script);
     updateAssessmentCounts(match.assessment);
     await savePortalData(data);
     return json(match.script);
@@ -2557,7 +2763,12 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
     const body = await readBody(request);
     for (const result of body.results || []) {
       const target = (match.script.results || []).find((item: any) => item.id === result.resultId);
-      if (target) Object.assign(target, { finalMarks: result.finalMarks, note: result.note });
+      if (target) {
+        const marks = Number(result.finalMarks);
+        const question = match.assessment.questions.find((q: any) => String(q.questionNumber) === String(target.questionNumber));
+        if (!Number.isFinite(marks) || marks < 0 || marks > Number(question?.marks || 0)) return json({ error: "Marks must be within the question total." }, 400);
+        Object.assign(target, { finalMarks: marks, note: String(result.note || "") });
+      }
     }
     match.script.finalTotal = (match.script.results || []).reduce((sum: number, result: any) => sum + Number(result.finalMarks || 0), 0);
     await savePortalData(data);
@@ -2569,35 +2780,43 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
     const body = await readBody(request);
     const scriptIds = new Set(body.scriptIds || []);
     for (const script of assessment.scripts || []) {
-      if (scriptIds.has(script.id)) script.status = path[3] === "approve" ? "APPROVED" : "PUBLISHED";
+      if (scriptIds.has(script.id)) {
+        if (path[3] === "publish" && (script.status !== "APPROVED" || !script.learnerId)) return json({ error: "Only approved scripts linked to a learner can be published." }, 409);
+        if (path[3] === "approve" && !["READY_FOR_REVIEW", "NEEDS_REVIEW"].includes(script.status)) return json({ error: "Review the script before approval." }, 409);
+        script.status = path[3] === "approve" ? "APPROVED" : "PUBLISHED";
+        script.reviewedBy = user.id;
+        script.reviewedAt = new Date().toISOString();
+      }
     }
     updateAssessmentCounts(assessment);
     await savePortalData(data);
     return json({ status: "OK" });
-  }
-  if (method === "POST" || method === "PATCH") {
-    return json({ status: "QUEUED" });
   }
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
 }
 
 async function handleStudents(request: NextRequest, method: string, path: string[], data: any, user: any) {
   ensureRole(user, ["ADMIN", "TEACHER"]);
+  const assignedClasses = data.classes.filter((item: any) => user.role === "ADMIN" || item.teacherEmail?.toLowerCase() === user.email.toLowerCase());
+  const assignedLearners = data.learners.filter((learner: any) => user.role === "ADMIN" || assignedClasses.some((item: any) => learner.classId ? learner.classId === item.id : (item.learners || []).some((entry: any) => entry.id === learner.id)));
+  const allowedLearnerIds = new Set(assignedLearners.map((item: any) => item.id));
+  if (user.role === "TEACHER" && method !== "GET" && path[1] !== "discipline" && path[2] !== "discipline") return json({ error: "Student administration requires administrator access." }, 403);
   if (method === "POST" && ["", "import", "teachers", "grades", "classes", "subjects"].includes(path[1] || "")) {
     ensureRole(user, ["ADMIN"]);
   }
   if (method === "GET" && path[1] === "discipline" && path.length === 2) {
-    const overview = buildDisciplineOverview(data);
+    const overview = buildDisciplineOverview({ ...data, learners: assignedLearners, disciplinary: { ...data.disciplinary, records: (data.disciplinary?.records || []).filter((item: any) => allowedLearnerIds.has(item.learnerId)) } });
     return json({
       ...overview,
-      learners: data.learners,
+      learners: assignedLearners,
     });
   }
 
   if (method === "PATCH" && path[1] === "discipline" && path[2]) {
-    const record = (data.disciplinary?.records || []).find((item: any) => item.id === path[2]);
+    const record = (data.disciplinary?.records || []).find((item: any) => item.id === path[2] && allowedLearnerIds.has(item.learnerId));
     if (!record) return json({ error: "Disciplinary record not found" }, 404);
-    Object.assign(record, await readBody(request));
+    const body = await readBody(request);
+    for (const key of ["title", "description", "actionTaken", "status", "severity", "category", "parentVisible", "followUpAt"]) if (body[key] !== undefined) record[key] = body[key];
     await savePortalData(data);
     return json(record);
   }
@@ -2605,8 +2824,8 @@ async function handleStudents(request: NextRequest, method: string, path: string
   if (method === "GET" && path.length === 1) {
     const status = request.nextUrl.searchParams.get("status") || "ACTIVE";
     const search = (request.nextUrl.searchParams.get("search") || "").toLowerCase();
-    const items = data.learners.filter((item: any) => item.status === status && `${item.firstName} ${item.lastName} ${item.studentNumber} ${item.identityNumber}`.toLowerCase().includes(search));
-    return json({ items, grades: data.grades, classes: data.classes, subjects: data.subjects });
+    const items = assignedLearners.filter((item: any) => item.status === status && `${item.firstName} ${item.lastName} ${item.studentNumber} ${item.identityNumber}`.toLowerCase().includes(search));
+    return json({ items, grades: data.grades, classes: assignedClasses, subjects: data.subjects });
   }
 
   if (method === "POST" && path.length === 1) {
@@ -2629,13 +2848,15 @@ async function handleStudents(request: NextRequest, method: string, path: string
     const body = await readBody(request);
     const email = String(body.email || "").trim().toLowerCase();
     const name = String(body.name || "").trim();
-    const temporaryPassword = String(body.temporaryPassword || "").trim() || "ChangeMe123!";
+    const temporaryPassword = String(body.temporaryPassword || "");
+    if (temporaryPassword.length < 12 || temporaryPassword.length > 128) return json({ error: "Enter a temporary password of 12 to 128 characters." }, 400);
     if (!email || !name) return json({ error: "Teacher name and email are required." }, 400);
     const teacher = await prisma.user.upsert({
       where: { email },
       update: { name, role: "TEACHER", passwordHash: await hashPassword(temporaryPassword) },
       create: { email, name, role: "TEACHER", passwordHash: await hashPassword(temporaryPassword) },
     });
+    await prisma.authSession.updateMany({ where: { userId: teacher.id }, data: { revokedAt: new Date() } });
     const welcome = renderTeacherWelcomeEmail(name, absoluteUrl(request, "/login"), temporaryPassword);
     await sendTransactionalEmail({ to: email, subject: welcome.subject, html: welcome.html, text: welcome.text });
     return json({ id: teacher.id, email: teacher.email, name: teacher.name, role: teacher.role }, 201);
@@ -2648,7 +2869,7 @@ async function handleStudents(request: NextRequest, method: string, path: string
     return json(item, 201);
   }
 
-  const learner = data.learners.find((item: any) => item.id === path[1]);
+  const learner = assignedLearners.find((item: any) => item.id === path[1]);
   if (!learner) return json({ error: "Student not found" }, 404);
   if (method === "GET" && path[2] === "discipline") {
     return json((data.disciplinary?.records || []).filter((item: any) => item.learnerId === learner.id));
@@ -3128,7 +3349,14 @@ async function handleApplications(request: NextRequest, method: string, path: st
     const opensAt = form.opensAt ? new Date(form.opensAt).getTime() : null;
     const closesAt = form.closesAt ? new Date(form.closesAt).getTime() : null;
     if ((form.admissionsOpenState || "open") === "closed" || (opensAt && now < opensAt) || (closesAt && now > closesAt)) return json({ error: form.closedMessage || "Admissions are currently closed." }, 400);
-    const submission = { id: uid("submission"), submissionReference: `APP-${String((form.submissions || []).length + 1).padStart(4, "0")}`, status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "website", ...body };
+    if ((body.files || []).length > 10) return json({ error: "Upload at most 10 documents." }, 400);
+    const submissionId = uid("submission");
+    const files = [];
+    for (const file of body.files || []) {
+      const document = await storeDocument(submissionId, { name: file.originalFilename, mimeType: file.mimeType, contentBase64: file.contentBase64 });
+      files.push({ ...document, fieldKey: file.fieldKey, originalFilename: document.name });
+    }
+    const submission = { applicantName: String(body.applicantName || ""), guardianName: String(body.guardianName || ""), guardianEmail: String(body.guardianEmail || ""), guardianPhone: String(body.guardianPhone || ""), payload: body.payload || {}, files, id: submissionId, submissionReference: "APP-" + String((form.submissions || []).length + 1).padStart(4, "0"), status: "SUBMITTED", submittedAt: new Date().toISOString(), submissionChannel: "website" };
     form.submissions = [submission, ...(form.submissions || [])];
     await savePortalData(data);
     return json(submission, 201);
@@ -3248,24 +3476,40 @@ async function handlePublic(request: NextRequest, method: string, path: string[]
 
 async function handleIdentity(request: NextRequest, method: string, path: string[], data: any, currentUser: any) {
   ensureRole(currentUser, ["ADMIN"]);
-  if (method === "GET" && path.join("/") === "identity/providers") return json(data.identityProviders);
+  const publicConfig = (provider: any) => ({ ...provider, clientSecret: undefined, privateKey: undefined });
+  if (method === "GET" && path.join("/") === "identity/providers") return json(data.identityProviders.map(publicConfig));
   const provider = data.identityProviders.find((item: any) => item.provider === path[2]);
   if (!provider) return json({ error: "Provider not found" }, 404);
   if (method === "PUT" && path[1] === "providers" && path.length === 3) {
-    Object.assign(provider, await readBody(request), { status: "CONFIGURED", credentialsConfigured: true, tokenHealth: "Ready" });
+    const body = await readBody(request);
+    for (const key of ["displayName", "tenantDomain", "externalTenantId", "clientId", "settings", "roleMappings"]) if (body[key] !== undefined) provider[key] = body[key];
+    if (body.clientSecret) provider.clientSecret = encryptSecret(String(body.clientSecret));
+    provider.credentialsConfigured = Boolean(provider.clientId && provider.clientSecret);
+    provider.status = provider.credentialsConfigured ? "CONFIGURED" : "NOT_CONFIGURED";
+    provider.tokenHealth = "Not tested";
     await savePortalData(data);
-    return json(provider);
+    return json(publicConfig(provider));
   }
   if (method === "DELETE" && path[1] === "providers" && path.length === 3) {
     Object.assign(provider, { status: "NOT_CONFIGURED", credentialsConfigured: false, tokenHealth: "Disconnected" });
     await savePortalData(data);
-    return json(provider);
+    return json(publicConfig(provider));
   }
   if (method === "POST" && path[1] === "providers" && path[3] === "sync") {
-    provider.lastSyncAt = new Date().toISOString();
-    provider.syncLogs = [{ id: uid("sync"), operation: "MANUAL_SYNC", status: "QUEUED", createdAt: provider.lastSyncAt }, ...(provider.syncLogs || [])];
+    let result: any;
+    try { result = await syncDirectory(provider); provider.lastSyncAt = new Date().toISOString(); provider.lastError = null; provider.tokenHealth = "Verified"; }
+    catch (error) { result = { status: "FAILED", error: (error as Error).message }; provider.lastError = result.error; provider.tokenHealth = "Failed"; }
+    provider.syncLogs = [{ id: uid("sync"), operation: "MANUAL_SYNC", ...result, createdAt: new Date().toISOString() }, ...(provider.syncLogs || [])].slice(0, 100);
     await savePortalData(data);
-    return json({ status: "QUEUED" });
+    return json(result);
   }
   return json({ error: `API route not found: /api/${path.join("/")}` }, 404);
 }
+
+export const POST = withWriteTransaction(POSTHandler);
+
+export const PUT = withWriteTransaction(PUTHandler);
+
+export const PATCH = withWriteTransaction(PATCHHandler);
+
+export const DELETE = withWriteTransaction(DELETEHandler);

@@ -1,12 +1,23 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
+import { prisma } from "@/src/server/prisma";
+import { initializePaystackTransaction } from "@/src/server/providers";
+import { getSetting } from "@/src/server/settings";
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const user = await requireUser(request);
+  if (!user) return unauthorized();
+  return NextResponse.json(await prisma.storeOrder.findMany({ where: user.role === "ADMIN" ? {} : { userId: user.id }, orderBy: { createdAt: "desc" } }));
+}
+
+async function POSTHandler(request: NextRequest) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
   const body = await request.json();
+  if (!["eft", "paystack"].includes(body.paymentMethod || "eft")) return NextResponse.json({ error: "Choose EFT or Paystack." }, { status: 400 });
   const data = await getOperationsData();
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return NextResponse.json({ error: "Your cart is empty." }, { status: 400 });
@@ -48,7 +59,17 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
     items: validItems
   };
-  data.store.orders.unshift(order);
+  const paymentReference = order.paymentMethod === "paystack" ? `store-${order.id}` : null;
+  let authorizationUrl: string | undefined;
+  if (paymentReference) {
+    const gateways = await getSetting<any>("payment-gateways", {});
+    const secretKey = gateways.primary?.provider === "PAYSTACK" && gateways.primary?.enabled ? gateways.primary.secretKey : process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) return NextResponse.json({ error: "Online payment is not configured. Choose EFT." }, { status: 503 });
+    const payment = await initializePaystackTransaction({ email: user.email, amount: order.totalAmount, reference: paymentReference, callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/parent-portal`, secretKey, metadata: { orderId: order.id } });
+    if (!payment.ok) return NextResponse.json({ error: payment.error }, { status: 503 });
+    authorizationUrl = payment.authorizationUrl;
+  }
+  await prisma.storeOrder.create({ data: { ...order, email: user.email, paymentReference, items: validItems } });
   for (const item of validItems) {
     data.store.salesHistory[item.productId] = [
       {
@@ -61,5 +82,7 @@ export async function POST(request: NextRequest) {
     ];
   }
   await saveOperationsData(data);
-  return NextResponse.json(order);
+  return NextResponse.json({ ...order, authorizationUrl });
 }
+
+export const POST = withWriteTransaction(POSTHandler);

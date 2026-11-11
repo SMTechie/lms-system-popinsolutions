@@ -1,7 +1,12 @@
 node_modules
 .dist
 .next
+.next-*
 .env
 .env.*
+!.env.example
 coverage
 .DS_Store
+infra/backups/
+.previous-release
+.previous-storage-format

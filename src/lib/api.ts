@@ -24,7 +24,7 @@ export async function apiRequest<T = any>(path: string, options: RequestOptions 
     ...rest,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && token !== "cookie" ? { Authorization: `Bearer ${token}` } : {}),
       ...(headers ?? {})
     },
     body

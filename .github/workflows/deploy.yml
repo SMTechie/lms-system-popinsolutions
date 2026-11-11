@@ -1,0 +1,59 @@
+name: Release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: production
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: popin
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: release_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U popin" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://popin:test@localhost:5432/release_test
+      AUTH_SECRET: release-test-secret-not-for-production
+      JOBS_SECRET: release-test-jobs-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:integration
+      - name: Build and publish immutable release
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL }}
+        run: |
+          set -eu
+          test -n "$PUBLIC_APP_URL"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-$GITHUB_SHA"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --build-arg NEXT_PUBLIC_APP_URL="$PUBLIC_APP_URL" -t "$image" .
+          docker push "$image"
+          printf 'APP_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
+      - name: Deploy release
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd /srv/popin-lms && git fetch origin '$GITHUB_SHA' && git checkout --detach '$GITHUB_SHA' && APP_IMAGE='$APP_IMAGE' sh infra/deploy.sh"

@@ -1,8 +1,9 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { createStoreProduct, getOperationsData, saveOperationsData } from "@/src/server/operations";
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -21,3 +22,5 @@ export async function POST(
   await saveOperationsData(data);
   return NextResponse.json(duplicate);
 }
+
+export const POST = withWriteTransaction(POSTHandler);

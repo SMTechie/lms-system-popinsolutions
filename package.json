@@ -11,9 +11,15 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:integration": "node scripts/test-integration.mjs",
+    "worker": "node scripts/worker.mjs",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose stop db",
+    "db:logs": "docker compose logs -f db",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:migrate-records": "tsx --env-file=.env scripts/migrate-records.ts",
     "postinstall": "prisma generate"
   },
   "engines": {

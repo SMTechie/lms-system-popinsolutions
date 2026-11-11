@@ -1,9 +1,10 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -31,3 +32,5 @@ export async function POST(
   await saveOperationsData(data);
   return NextResponse.json(po);
 }
+
+export const POST = withWriteTransaction(POSTHandler);

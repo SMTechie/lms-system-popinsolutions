@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -11,14 +11,17 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useBranding } from '../settings/BrandingContext';
+import { apiRequest } from '../lib/api';
 
 export default function Login() {
-  const { login, signup } = useAuth();
+  const { login, signup, user } = useAuth();
   const { branding } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(new URLSearchParams(location.search).get('email') || '');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const resetToken = new URLSearchParams(location.search).get('reset');
   const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,13 +34,20 @@ export default function Login() {
   const schoolMotto = branding?.schoolMotto || 'Connected school operations';
   const logoUrl = branding?.logoUrl;
   const isLogin = mode === 'login';
+  useEffect(() => { if (user && new URLSearchParams(location.search).get('sso') === 'complete') navigate(user.role === 'PARENT' ? '/parent-portal' : user.role === 'TEACHER' ? '/teacher-portal' : '/', { replace: true }); }, [user, location.search, navigate]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      if (resetToken) {
+        const result = await apiRequest<{ message: string }>('/auth/recovery', { method: 'POST', auth: false, body: JSON.stringify({ email: new URLSearchParams(location.search).get('email'), token: resetToken, password }) });
+        setError(result.message);
+        navigate('/login', { replace: true });
+        return;
+      }
       const result = mode === 'login'
-        ? await login(email, password)
+        ? await login(email, password, code)
         : await (async () => {
           if (password !== confirmPassword) throw new Error('Passwords do not match.');
           return signup(email, password, name);
@@ -94,6 +104,7 @@ export default function Login() {
             </div>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              {resetToken && <p>Enter your email and a new password of at least 12 characters.</p>}
               {!isLogin && (
                 <div>
                   <label htmlFor="login-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Full name</label>
@@ -158,13 +169,21 @@ export default function Login() {
                   {error}
                 </div>
               )}
+              {isLogin && <label className="block text-sm">Sign-in code (if requested)<input value={code} onChange={e => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" className="mt-1 w-full rounded-lg border p-2" /></label>}
+              {isLogin && !resetToken && <button type="button" disabled={loading} className="text-sm text-blue-600" onClick={async () => {
+                if (!email) { setError('Enter your email address first.'); return; }
+                setLoading(true);
+                try { const response = await apiRequest<{ message: string }>('/auth/recovery', { method: 'POST', auth: false, body: JSON.stringify({ email }) }); setError(response.message); }
+                catch (error: any) { setError(error.message); }
+                finally { setLoading(false); }
+              }}>Forgot password?</button>}
 
               <button
                 type="submit"
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span>{loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Create account'}</span>
+                <span>{loading ? 'Please wait...' : resetToken ? 'Set new password' : isLogin ? 'Sign in' : 'Create account'}</span>
                 {!loading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>

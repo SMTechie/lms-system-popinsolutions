@@ -1,8 +1,9 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 
-export async function PATCH(
+async function PATCHHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -18,3 +19,5 @@ export async function PATCH(
   await saveOperationsData(data);
   return NextResponse.json(product);
 }
+
+export const PATCH = withWriteTransaction(PATCHHandler);

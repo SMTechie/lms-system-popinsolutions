@@ -6,8 +6,9 @@ export async function requireUser(request: NextRequest) {
   try {
     const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
     const pathname = request.nextUrl.pathname;
-    const teacherRestrictedPath = pathname.startsWith("/api/inventory") || pathname.startsWith("/api/requisitions") || pathname.startsWith("/api/tickets/requisitions") || pathname.startsWith("/api/store/orders") || pathname.startsWith("/api/store/products") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/audit");
-    if (user?.role === "TEACHER" && teacherRestrictedPath) return null;
+    const adminPath = ["/api/inventory", "/api/requisitions", "/api/tickets", "/api/store/products", "/api/settings", "/api/audit", "/api/integrations"].some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    if (user && user.role !== "ADMIN" && adminPath) return null;
+    if (pathname.startsWith("/api/store/orders") && user && !["ADMIN", "PARENT"].includes(user.role)) return null;
     return user;
   } catch {
     return null;

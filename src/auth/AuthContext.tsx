@@ -7,7 +7,7 @@ interface AuthContextValue {
   user: { id: string; email: string; name?: string | null; role: string } | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ id: string; email: string; name?: string | null; role: string }>;
+  login: (email: string, password: string, code?: string) => Promise<{ id: string; email: string; name?: string | null; role: string }>;
   signup: (email: string, password: string, name?: string) => Promise<{ id: string; email: string; name?: string | null; role: string }>;
   logout: () => void;
 }
@@ -21,13 +21,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = tokenStorage.get();
-    if (!stored) {
-      setLoading(false);
-      return;
-    }
     setToken(stored);
     apiRequest<{ id: string; email: string; name?: string | null; role: string }>("/auth/me")
-      .then(setUser)
+      .then(user => { setUser(user); setToken('cookie'); tokenStorage.set('cookie'); })
       .catch(() => {
         tokenStorage.clear();
         setToken(null);
@@ -36,13 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, code?: string) => {
     if (!email || !password) throw new Error("Enter an email and password.");
-    const response = await apiRequest<{ token: string; user: { id: string; email: string; name?: string | null; role: string } }>("/auth/login", {
+    const response = await apiRequest<{ token: string; mfaRequired?: boolean; user: { id: string; email: string; name?: string | null; role: string } }>("/auth/login", {
       method: "POST",
       auth: false,
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, code })
     });
+    if (response.mfaRequired) throw new Error("Enter the sign-in code sent to your email, then sign in again.");
     tokenStorage.set(response.token);
     setToken(response.token);
     setUser(response.user);
@@ -64,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    void apiRequest("/auth/logout", { method: "POST" }).catch(() => undefined);
     tokenStorage.clear();
     setToken(null);
     setUser(null);

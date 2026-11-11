@@ -1,18 +1,46 @@
 services:
+  worker:
+    image: node:20-alpine
+    profiles: ["processing"]
+    restart: unless-stopped
+    working_dir: /app
+    env_file: .env
+    environment:
+      INTERNAL_APP_URL: http://host.docker.internal:3000
+    volumes:
+      - ./scripts/worker.mjs:/app/worker.mjs:ro
+    command: ["node", "worker.mjs"]
+
+  backup:
+    image: postgres:16-alpine
+    profiles: ["processing"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-popin}
+      POSTGRES_DB: ${POSTGRES_DB:-popin_lms}
+      PGHOST: db
+      PGPASSWORD: ${POSTGRES_PASSWORD:-popin_local_password}
+    entrypoint: ["sh", "/backup.sh"]
+    volumes:
+      - ./infra/backup.sh:/backup.sh:ro
+      - ./infra/backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
   db:
     image: postgres:16-alpine
     container_name: popin-lms-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: popin_lms
-      POSTGRES_USER: popin
-      POSTGRES_PASSWORD: popin_local_password
+      POSTGRES_DB: ${POSTGRES_DB:-popin_lms}
+      POSTGRES_USER: ${POSTGRES_USER:-popin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-popin_local_password}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - popin_lms_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U popin -d popin_lms"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10

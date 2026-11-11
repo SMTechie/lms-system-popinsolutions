@@ -1,7 +1,10 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { appendAuditLog, getSetting } from "@/src/server/settings";
 import { getPortalData, savePortalData } from "@/src/server/portalData";
+import { prisma } from "@/src/server/prisma";
+import { transitionOrder } from "@/src/server/orders";
 
 function defaultPaymentGateways() {
   return {
@@ -27,7 +30,7 @@ function applyPaymentToFee(data: any, payment: any) {
   payment.appliedAt = new Date().toISOString();
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const rawBody = await request.text();
   const gateways = await getSetting("payment-gateways", defaultPaymentGateways());
   const secretKey = gateways?.primary?.secretKey || process.env.PAYSTACK_SECRET_KEY || "";
@@ -38,12 +41,19 @@ export async function POST(request: NextRequest) {
 
   const signature = request.headers.get("x-paystack-signature") || "";
   const expected = crypto.createHmac("sha512", secretKey).update(rawBody).digest("hex");
-  if (!signature || signature !== expected) {
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
   const event = JSON.parse(rawBody || "{}");
   const reference = String(event?.data?.reference || "");
+  if (event?.event === "charge.success" && reference.startsWith("store-")) {
+    const order = await prisma.storeOrder.findUnique({ where: { paymentReference: reference } });
+    if (!order) return NextResponse.json({ error: "Unknown order." }, { status: 404 });
+    if (Number(event.data.amount) !== Math.round(Number(order.totalAmount) * 100) || event.data.currency !== "ZAR") return NextResponse.json({ error: "Payment amount or currency mismatch." }, { status: 400 });
+    if (order.status === "PLACED") await transitionOrder(order.id, { id: "paystack", email: "paystack", role: "ADMIN" }, "PAID", reference);
+    return NextResponse.json({ ok: true });
+  }
   const data = await getPortalData();
   data.parent = data.parent || {};
   data.parent.payments = data.parent.payments || [];
@@ -52,6 +62,8 @@ export async function POST(request: NextRequest) {
   if (event?.event === "charge.success" && reference) {
     const payment = data.parent.payments.find((item: any) => item.reference === reference) as any;
     if (payment) {
+      if (Number(event.data.amount) !== Math.round(Number(payment.amount) * 100) || event.data.currency !== "ZAR") return NextResponse.json({ error: "Payment amount or currency mismatch." }, { status: 400 });
+      if (payment.appliedAt) return NextResponse.json({ ok: true });
       payment.status = "VERIFIED";
       payment.method = payment.method || "PAYSTACK";
       payment.gatewayProvider = "PAYSTACK";
@@ -87,3 +99,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withWriteTransaction(POSTHandler);

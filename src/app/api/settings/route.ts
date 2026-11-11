@@ -4,7 +4,7 @@ import { prisma } from "@/src/server/prisma";
 
 async function requireUser(request: NextRequest) {
   const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return null;
   }
   return user;
@@ -12,7 +12,7 @@ async function requireUser(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const user = await requireUser(request);
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

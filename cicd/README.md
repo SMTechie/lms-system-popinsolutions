@@ -1,5 +1,7 @@
 # DevSecOps CI/CD Orchestration (Free, GitHub-Only)
 
+These are reference templates for a separate multi-service installation. The current LMS is one Next.js application. Use `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `infra/docker-compose.prod.yml` and `infra/deploy.sh` for this repository. The templates below are not the active deployment configuration.
+
 This package provides a secure, reusable CI/CD system using GitHub Actions, self-hosted runners, GHCR, and open-source security tooling.
 
 **Key rules enforced**

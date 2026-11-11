@@ -58,7 +58,11 @@ export default function TeacherPortal() {
   const [work, setWork] = useState({ type: 'HOMEWORK', title: '', classId: '', instructions: '', dueAt: '', scheduledAt: '', visibleToParents: true });
   const [attendanceClass, setAttendanceClass] = useState<any>(null);
   const [attendance, setAttendance] = useState<Record<string, { status: string; note: string }>>({});
+  const [registerDate, setRegisterDate] = useState('');
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [conversationDraft, setConversationDraft] = useState({ learnerId: '', subject: '', message: '' });
+  const [sendingConversation, setSendingConversation] = useState(false);
   const [profileDraft, setProfileDraft] = useState<any>(null);
   const [timetableDraft, setTimetableDraft] = useState({ classId: '', day: 'Monday', subject: '', startsAt: '08:00', endsAt: '08:45', room: '' });
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
@@ -77,7 +81,7 @@ export default function TeacherPortal() {
     setLoading(true);
     setError('');
     try {
-      const [summary, classData, messageData, profileData, appointmentData, assessmentData, resourceData, reportData, calendarData, notificationData, gradebookData] = await Promise.all([
+      const results = await Promise.allSettled([
         apiRequest('/teacher/dashboard'),
         apiRequest<any[]>('/teacher/classes'),
         apiRequest<any[]>('/teacher/messages'),
@@ -90,6 +94,8 @@ export default function TeacherPortal() {
         apiRequest<any[]>('/teacher/notifications'),
         apiRequest('/teacher/gradebook'),
       ]);
+      const [summary, classData, messageData, profileData, appointmentData, assessmentData, resourceData, reportData, calendarData, notificationData, gradebookData] = results.map((result) => result.status === 'fulfilled' ? result.value : null);
+      if (results.some((result) => result.status === 'rejected')) setError('Some workspace sections could not load. Use Refresh to retry.');
       setDashboard(summary && typeof summary === 'object' ? summary : null);
       setClasses(Array.isArray(classData) ? classData : []);
       setMessages(Array.isArray(messageData) ? messageData : []);
@@ -110,7 +116,29 @@ export default function TeacherPortal() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (tab !== 'classes' && tab !== 'communication') return;
+    let cancelled = false;
+    setLoading(true);
+    const refresh = async () => {
+      try {
+        const classData = await apiRequest<any[]>('/teacher/classes');
+        if (!cancelled) setClasses(Array.isArray(classData) ? classData : []);
+        if (tab === 'communication') {
+          const messageData = await apiRequest<any[]>('/teacher/messages');
+          if (!cancelled) setMessages(Array.isArray(messageData) ? messageData : []);
+        }
+      } catch (error: any) {
+        if (!cancelled) notifyAction(error.message || 'Could not load this tab.', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void refresh();
+    return () => { cancelled = true; };
+  }, [tab, user?.id]);
 
   const allWork = useMemo(() => classes.flatMap((item) => item.workItems || []), [classes]);
   const workByType = (type: string) => allWork.filter((item) => item.type === type);
@@ -200,13 +228,34 @@ export default function TeacherPortal() {
     try { await apiRequest('/teacher/calendar', { method: 'POST', body: JSON.stringify(calendarDraft) }); setCalendarDraft({ title: '', type: 'Lesson', startsAt: '', endsAt: '', classId: '', notes: '' }); notifyAction('Calendar event added.', 'success'); await load(); }
     catch (err: any) { notifyAction(err.message || 'Could not add calendar event.', 'error'); }
   };
-  const markNotificationsRead = async () => { await apiRequest('/teacher/notifications/read-all', { method: 'POST' }); await load(); };
+  const markNotificationsRead = async () => {
+    try {
+      await apiRequest('/teacher/notifications/read-all', { method: 'POST' });
+      window.dispatchEvent(new Event('popin-notifications-updated'));
+      await load();
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not mark notifications as read.', 'error');
+    }
+  };
 
-  const openAttendance = (schoolClass: any) => {
+  const openAttendance = async (schoolClass: any) => {
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    setRegisterDate(date);
     setAttendanceClass(schoolClass);
-    setAttendance(
-      Object.fromEntries((schoolClass.learners || []).map((learner: any) => [learner.id, { status: 'PRESENT', note: '' }])),
-    );
+    setLoadingAttendance(true);
+    try {
+      const saved = await apiRequest<any[]>(`/teacher/attendance?classId=${encodeURIComponent(schoolClass.id)}&date=${date}`);
+      setAttendance(Object.fromEntries((schoolClass.learners || []).map((learner: any) => {
+        const entry = saved.find((item) => item.learnerId === learner.id);
+        return [learner.id, { status: entry?.status || 'PRESENT', note: entry?.note || '' }];
+      })));
+    } catch (error: any) {
+      setAttendanceClass(null);
+      notifyAction(error.message || 'Could not load the saved register.', 'error');
+    } finally {
+      setLoadingAttendance(false);
+    }
   };
 
   const saveAttendance = async (submit: boolean) => {
@@ -216,7 +265,7 @@ export default function TeacherPortal() {
         method: 'POST',
         body: JSON.stringify({
           classId: attendanceClass.id,
-          registerDate: new Date().toISOString(),
+          registerDate,
           submit,
           entries: Object.entries(attendance).map(([learnerId, value]) => ({ learnerId, ...value })),
         }),
@@ -245,6 +294,24 @@ export default function TeacherPortal() {
       await load();
     } catch (error: any) {
       notifyAction(error.message || 'Could not send the reply.', 'error');
+    }
+  };
+
+  const startParentConversation = async () => {
+    if (!conversationDraft.learnerId || !conversationDraft.subject.trim() || !conversationDraft.message.trim()) {
+      notifyAction('Select a learner and enter a subject and message.', 'error');
+      return;
+    }
+    setSendingConversation(true);
+    try {
+      await apiRequest('/teacher/messages', { method: 'POST', body: JSON.stringify(conversationDraft) });
+      setConversationDraft({ learnerId: '', subject: '', message: '' });
+      setMessages(await apiRequest<any[]>('/teacher/messages'));
+      notifyAction('Message sent to the learner’s linked guardians.', 'success');
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not send the message.', 'error');
+    } finally {
+      setSendingConversation(false);
     }
   };
 
@@ -426,6 +493,7 @@ export default function TeacherPortal() {
 
         {!loading && tab === 'classes' && (
           <div className="grid gap-5 lg:grid-cols-2">
+            {!classes.length && <Panel title="My Classes"><Empty text="No classes are assigned to your account yet. Ask your school administrator to assign your classes." /></Panel>}
             {classes.map((schoolClass) => (
               <div key={schoolClass.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex justify-between gap-3">
@@ -626,6 +694,19 @@ export default function TeacherPortal() {
 
         {!loading && tab === 'communication' && (
           <div className="space-y-5">
+            <Panel title="Message a parent">
+              <div className="space-y-3">
+                <Field label="Learner">
+                  <select className={fieldClass} value={conversationDraft.learnerId} onChange={(event) => setConversationDraft((current) => ({ ...current, learnerId: event.target.value }))}>
+                    <option value="">Select a learner from your classes</option>
+                    {classes.map((schoolClass) => <optgroup key={schoolClass.id} label={schoolClass.name}>{schoolClass.learners.map((learner: any) => <option key={learner.id} value={learner.id}>{learner.firstName} {learner.lastName} · {learner.studentNumber}</option>)}</optgroup>)}
+                  </select>
+                </Field>
+                <Field label="Subject"><input className={fieldClass} value={conversationDraft.subject} onChange={(event) => setConversationDraft((current) => ({ ...current, subject: event.target.value }))} /></Field>
+                <Field label="Message"><textarea rows={4} className={fieldClass} value={conversationDraft.message} onChange={(event) => setConversationDraft((current) => ({ ...current, message: event.target.value }))} /></Field>
+                <button disabled={sendingConversation || !classes.length} onClick={() => void startParentConversation()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{sendingConversation ? 'Sending…' : 'Send message'}</button>
+              </div>
+            </Panel>
             <Panel title="Parent conversations">
               <p className="mb-4 text-xs text-slate-500">Reply directly from the teacher portal. Parents will see updates in their portal and notifications.</p>
               {messages.length ? (
@@ -646,6 +727,7 @@ export default function TeacherPortal() {
                               Close
                             </button>
                           )}
+                          {thread.status === 'CLOSED' && <button onClick={() => void updateThreadStatus(thread.id, 'OPEN')} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600">Reopen</button>}
                         </div>
                       </div>
                       <div className="mt-4 space-y-3">
@@ -837,6 +919,7 @@ export default function TeacherPortal() {
 
       <Modal title={`Attendance / ${attendanceClass?.name || ''}`} isOpen={!!attendanceClass} onClose={() => setAttendanceClass(null)}>
         <div className="max-h-[68vh] space-y-3 overflow-y-auto">
+          {loadingAttendance && <p className="text-sm text-slate-500">Loading saved register…</p>}
           {attendanceClass?.learners.map((learner: any) => (
             <div key={learner.id} className="rounded-2xl border border-slate-100 p-3">
               <p className="mb-2 text-sm font-bold text-slate-900">
@@ -846,6 +929,7 @@ export default function TeacherPortal() {
                 <select
                   className={fieldClass}
                   value={attendance[learner.id]?.status}
+                  disabled={loadingAttendance}
                   onChange={(event) => setAttendance({ ...attendance, [learner.id]: { ...attendance[learner.id], status: event.target.value } })}
                 >
                   {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
@@ -855,6 +939,7 @@ export default function TeacherPortal() {
                 <input
                   className={fieldClass}
                   placeholder="Note"
+                  disabled={loadingAttendance}
                   value={attendance[learner.id]?.note || ''}
                   onChange={(event) => setAttendance({ ...attendance, [learner.id]: { ...attendance[learner.id], note: event.target.value } })}
                 />
@@ -862,10 +947,10 @@ export default function TeacherPortal() {
             </div>
           ))}
           <div className="flex gap-2">
-            <button onClick={() => void saveAttendance(false)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-bold text-slate-700">
+            <button disabled={loadingAttendance} onClick={() => void saveAttendance(false)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-bold text-slate-700 disabled:opacity-50">
               Save draft
             </button>
-            <button onClick={() => void saveAttendance(true)} className="flex-1 rounded-xl bg-blue-600 py-2 text-sm font-bold text-white">
+            <button disabled={loadingAttendance} onClick={() => void saveAttendance(true)} className="flex-1 rounded-xl bg-blue-600 py-2 text-sm font-bold text-white disabled:opacity-50">
               Submit register
             </button>
           </div>

@@ -1,51 +1,122 @@
+x-app: &app
+  image: ${APP_IMAGE:-popin-lms:local}
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    args:
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY:-}
+  env_file:
+    - ../.env
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgresql://${POSTGRES_USER:-popin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-popin_lms}?schema=public
+    AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+    NEXT_PUBLIC_AUTH_BYPASS: "false"
+    OCR_URL: ${OCR_URL:-}
+
 services:
-  postgres:
-    image: postgres:16
+  ocr:
+    profiles: ["ocr"]
+    build: ./ocr
     restart: unless-stopped
     environment:
-      POSTGRES_USER: popin
-      POSTGRES_PASSWORD: popin
-      POSTGRES_DB: popin_lms
+      JOBS_SECRET: ${JOBS_SECRET:?Set JOBS_SECRET in .env}
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    mem_limit: 512m
+    cpus: 1
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-popin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-popin_lms}
     volumes:
       - popin_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  redis:
-    image: redis:7
-    restart: unless-stopped
-
-  api:
-    build:
-      context: ..
-      dockerfile: apps/api/Dockerfile
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://popin:popin@postgres:5432/popin_lms
-      REDIS_URL: redis://redis:6379
-      PORT: 4000
+  migrate:
+    <<: *app
+    command: ["sh", "-c", "npm run db:migrate && npx tsx scripts/migrate-records.ts"]
+    restart: "no"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
 
   web:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment:
-      NODE_ENV: production
-    depends_on:
-      - api
-
-  nginx:
-    image: nginx:1.27
+    <<: *app
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["node", "scripts/worker.mjs"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-popin}
+      POSTGRES_DB: ${POSTGRES_DB:-popin_lms}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    entrypoint: ["sh", "/backup.sh"]
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ${BACKUP_PATH:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -name 'popin-*.dump' -mmin -1500 | grep -q ."]
+      interval: 5m
+      timeout: 10s
+      start_period: 5m
+      retries: 2
+
+  monitor:
+    <<: *app
+    command: ["node", "scripts/monitor.mjs"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - web
-      - api
 
 volumes:
   popin_pg:
+  caddy_data:
+  caddy_config:

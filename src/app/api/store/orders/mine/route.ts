@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData } from "@/src/server/operations";
+import { prisma } from "@/src/server/prisma";
 
 export async function GET(request: NextRequest) {
   const user = await requireUser(request);
   if (!user) return unauthorized();
   const data = await getOperationsData();
-  return NextResponse.json(data.store.orders.filter((entry) => entry.userId === user.id));
+  return NextResponse.json([...(await prisma.storeOrder.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } })), ...data.store.orders.filter((entry) => entry.userId === user.id)]);
 }

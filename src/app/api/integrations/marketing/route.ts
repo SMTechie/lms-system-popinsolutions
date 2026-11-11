@@ -1,3 +1,4 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromHeader } from "@/src/server/auth";
 import { appendAuditLog, getSetting, putSetting } from "@/src/server/settings";
@@ -26,7 +27,7 @@ const fallbackIntegration = {
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -34,16 +35,16 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(integration);
 }
 
-export async function PUT(request: NextRequest) {
+async function PUTHandler(request: NextRequest) {
   const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const payload = await request.json();
   const value = {
     ...payload,
-    lastCatalogSyncAt: new Date().toISOString()
+    lastCatalogSyncAt: null
   };
 
   await putSetting("marketing-integration", value);
@@ -52,8 +53,10 @@ export async function PUT(request: NextRequest) {
     entity: "Setting",
     entityId: "marketing-integration",
     actorId: user.email,
-    metadata: value
+    metadata: { updated: true }
   });
 
   return NextResponse.json(value);
 }
+
+export const PUT = withWriteTransaction(PUTHandler);

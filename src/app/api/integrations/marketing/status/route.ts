@@ -4,20 +4,15 @@ import { getSetting } from "@/src/server/settings";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const integration = await getSetting<any>("marketing-integration", {});
-  const now = new Date().toISOString();
+  const history = await getSetting<any[]>("marketing-connection-history", []);
 
   return NextResponse.json({
-    lastApi: {
-      createdAt: integration.lastCatalogSyncAt ?? now
-    },
-    lastWebhook: {
-      createdAt: now
-    },
-    webhookFailureCount: 0
+    lastApi: history.find(item => item.type === "api") || null,
+    lastWebhook: history.find(item => item.type === "webhook") || null,
+    webhookFailureCount: history.filter(item => item.type === "webhook" && !item.ok).length
   });
 }

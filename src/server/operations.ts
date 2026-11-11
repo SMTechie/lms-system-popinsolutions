@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { getSetting, putSetting } from "./settings";
+import { readRecordData, writeRecordData } from "./recordStorage";
 
 type InventoryCategory = { id: string; name: string };
 type InventoryUnit = { id: string; name: string; abbreviation: string };
@@ -434,11 +434,11 @@ export function defaultOperationsData(): OperationsData {
 }
 
 export async function getOperationsData() {
-  return getSetting<OperationsData>("operations", defaultOperationsData());
+  return readRecordData<OperationsData>("operations", defaultOperationsData());
 }
 
 export async function saveOperationsData(data: OperationsData) {
-  await putSetting("operations", data);
+  await writeRecordData("operations", data);
   return data;
 }
 

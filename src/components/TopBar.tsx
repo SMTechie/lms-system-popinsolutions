@@ -36,6 +36,8 @@ type NotificationItem = {
   message: string;
   time: string;
   read: boolean;
+  readAt?: string | null;
+  createdAt?: string;
   route?: string;
 };
 
@@ -47,10 +49,15 @@ const notificationIcons: Record<string, React.ReactNode> = {
   appointment: <CalendarDays className="h-4 w-4 text-rose-600" />,
 };
 
-const withNotificationRoute = (item: NotificationItem): NotificationItem => ({
+const withNotificationRoute = (item: NotificationItem, role: string): NotificationItem => ({
   ...item,
+  read: item.readAt !== undefined ? Boolean(item.readAt) : Boolean(item.read),
+  time: item.time || (item.createdAt ? new Date(item.createdAt).toLocaleString() : ''),
   route:
-    item.type === 'approval'
+    role === 'TEACHER' ? '/teacher-portal'
+    : role === 'PARENT' ? '/parent-portal'
+    : role === 'STUDENT' ? '/student-portal'
+    : item.type === 'approval'
       ? '/requisitions'
       : item.type === 'ticket'
         ? '/tickets'
@@ -114,6 +121,9 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
   const { branding } = useBranding();
 
   const role = user?.role || 'ADMIN';
+  const notificationEndpoint = role === 'PARENT' ? '/parent/notifications'
+    : role === 'TEACHER' ? '/teacher/notifications'
+    : role === 'STUDENT' ? '/student/notifications' : '/admin/notifications';
   const profileName = user?.name || 'Workspace User';
   const profileEmail = user?.email || 'admin@popin.school';
   const initials = profileName
@@ -149,18 +159,22 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
   }, []);
 
   useEffect(() => {
-    const endpoint =
-      role === 'PARENT'
-        ? '/parent/notifications'
-        : role === 'STUDENT'
-          ? '/student/notifications'
-          : '/admin/notifications';
-    apiRequest<NotificationItem[]>(endpoint)
-      .then((items) => setNotifications((Array.isArray(items) ? items : []).map(withNotificationRoute)))
-      .catch(() => {
-        setNotifications([]);
-      });
-  }, [role]);
+    let cancelled = false;
+    setNotifications([]);
+    const refresh = () => apiRequest<NotificationItem[]>(notificationEndpoint)
+      .then((items) => {
+        if (!cancelled) setNotifications((Array.isArray(items) ? items : []).map((item) => withNotificationRoute(item, role)));
+      })
+      .catch(() => { if (!cancelled) setNotifications([]); });
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30000);
+    window.addEventListener('popin-notifications-updated', refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('popin-notifications-updated', refresh);
+    };
+  }, [role, user?.id, notificationEndpoint, notifOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -311,18 +325,12 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
                     <button
                       className="text-xs font-medium text-blue-600 hover:underline"
                       onClick={async () => {
-                        setNotifications((current) => current.map((item) => ({ ...item, read: true })));
                         try {
-                          const endpoint =
-                            role === 'PARENT'
-                              ? '/parent/notifications/read-all'
-                              : role === 'STUDENT'
-                                ? '/student/notifications/read-all'
-                                : '/admin/notifications/read-all';
+                          const endpoint = `${notificationEndpoint}/read-all`;
                           const items = await apiRequest<NotificationItem[]>(endpoint, { method: 'POST' });
-                          setNotifications((Array.isArray(items) ? items : []).map(withNotificationRoute));
-                        } catch {
-                          // keep optimistic state
+                          setNotifications((Array.isArray(items) ? items : []).map((item) => withNotificationRoute(item, role)));
+                        } catch (error: any) {
+                          notifyAction(error.message || 'Could not mark notifications as read.', 'error');
                         }
                       }}
                     >
@@ -333,7 +341,15 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
                     {notifications.map((item) => (
                       <li key={item.id}>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
+                            if (['PARENT', 'TEACHER', 'STUDENT'].includes(role) && !item.read) {
+                              try {
+                                await apiRequest(`${notificationEndpoint}/${item.id}/read`, { method: 'POST' });
+                              } catch (error: any) {
+                                notifyAction(error.message || 'Could not mark the notification as read.', 'error');
+                                return;
+                              }
+                            }
                             setNotifications((current) =>
                               current.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)),
                             );

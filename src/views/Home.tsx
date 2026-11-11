@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { downloadDocument } from '../lib/documents';
 import {
   AlertTriangle,
   CheckSquare,
@@ -249,6 +250,7 @@ export default function Home() {
                   status={item.status}
                   actions={
                     <div className="flex gap-2">
+                      {item.proofDocumentId && <button className="text-sm text-blue-700 underline" onClick={() => void downloadDocument(item.proofDocumentId, item.proofFileName || 'proof.pdf').catch(error => notifyAction(error.message, 'error'))}>View proof</button>}
                       <button
                         onClick={() =>
                           void runAction(

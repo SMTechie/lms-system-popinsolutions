@@ -12,13 +12,118 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
-  role         String   @default("ADMIN")
+  role         String   @default("PARENT")
   registrationStatus String @default("APPROVED")
   registrationReviewedAt DateTime?
   registrationReviewedBy String?
   registrationRejectionReason String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  sessions     AuthSession[]
+  challenges   AuthChallenge[]
+}
+
+model AuthSession {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  lastSeenAt DateTime @default(now())
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+model AuthChallenge {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose String
+  tokenHash String @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, purpose])
+}
+
+model RateLimit {
+  key String @id
+  count Int @default(1)
+  resetAt DateTime
+}
+
+model Document {
+  id String @id @default(cuid())
+  ownerId String
+  name String
+  mimeType String
+  size Int
+  storageKey String @unique
+  content Bytes
+  createdAt DateTime @default(now())
+  @@index([ownerId])
+}
+
+model Supplier {
+  id String @id @default(cuid())
+  name String
+  email String?
+  phone String?
+  address String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StoreOrder {
+  id String @id @default(cuid())
+  userId String
+  email String
+  status String @default("PLACED")
+  paymentStatus String @default("PENDING")
+  paymentMethod String
+  paymentReference String? @unique
+  totalAmount Decimal @db.Decimal(12, 2)
+  items Json
+  collectionLocation String @default("School reception")
+  refundReference String?
+  collectedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt])
+}
+
+model ExternalIdentity {
+  id String @id @default(cuid())
+  userId String
+  issuer String
+  subject String
+  createdAt DateTime @default(now())
+  @@unique([issuer, subject])
+  @@index([userId])
+}
+
+model OAuthState {
+  id String @id
+  payload String
+  expiresAt DateTime
+}
+
+// Legacy portal views are hydrated from independently persisted entity rows.
+// The composite key prevents duplicate entities inside each collection.
+model DataRecord {
+  namespace String
+  collection String
+  id String
+  position Int
+  payload Json
+  digest String
+  learnerId String?
+  ownerEmail String?
+  updatedAt DateTime @updatedAt
+  @@id([namespace, collection, id])
+  @@index([namespace, learnerId])
+  @@index([namespace, ownerEmail])
 }
 
 model Setting {

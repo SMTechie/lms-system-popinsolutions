@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { getSetting, putSetting } from "./settings";
+import { readRecordData, writeRecordData } from "./recordStorage";
 
 const now = () => new Date().toISOString();
 
@@ -983,11 +983,11 @@ export function defaultPortalData() {
 }
 
 export async function getPortalData() {
-  return getSetting<PortalData>("portal-data", defaultPortalData());
+  return readRecordData<PortalData>("portal-data", defaultPortalData());
 }
 
 export async function savePortalData(data: PortalData) {
-  await putSetting("portal-data", data);
+  await writeRecordData("portal-data", data);
   return data;
 }
 

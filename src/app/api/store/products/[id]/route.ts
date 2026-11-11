@@ -1,8 +1,9 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { canManageStore, forbidden, requireUser, unauthorized } from "@/src/server/http";
 import { getOperationsData, saveOperationsData } from "@/src/server/operations";
 
-export async function PATCH(
+async function PATCHHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -22,7 +23,7 @@ export async function PATCH(
   return NextResponse.json(product);
 }
 
-export async function DELETE(
+async function DELETEHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -37,3 +38,7 @@ export async function DELETE(
   await saveOperationsData(data);
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withWriteTransaction(PATCHHandler);
+
+export const DELETE = withWriteTransaction(DELETEHandler);

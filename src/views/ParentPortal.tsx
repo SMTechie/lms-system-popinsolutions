@@ -1,3 +1,4 @@
+import { uploadDocument } from "../lib/documents";
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
@@ -89,11 +90,11 @@ export default function ParentPortal() {
   const [loadingContext, setLoadingContext] = useState(false);
   const [loadingModule, setLoadingModule] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
-  const [paymentDraft, setPaymentDraft] = useState({ feeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '' });
+  const [paymentDraft, setPaymentDraft] = useState({ feeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '', proofDocumentId: '' });
   const [appointmentDraft, setAppointmentDraft] = useState({
     title: '',
     teacherName: 'Assigned Teacher',
-    teacherEmail: 'teacher@popin.school',
+    teacherEmail: '',
     startsAt: '',
     endsAt: '',
     location: 'School campus',
@@ -308,7 +309,7 @@ export default function ParentPortal() {
         }),
       });
       notifyAction('Payment submitted for verification.', 'success');
-      setPaymentDraft({ feeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '' });
+      setPaymentDraft({ feeId: '', amount: '', method: 'EFT', reference: '', proofFileName: '', proofDocumentId: '' });
       await refreshActive();
     } catch (error: any) {
       notifyAction(error.message || 'Could not submit the payment.', 'error');
@@ -329,7 +330,7 @@ export default function ParentPortal() {
       setAppointmentDraft({
         title: '',
         teacherName: 'Assigned Teacher',
-        teacherEmail: 'teacher@popin.school',
+        teacherEmail: '',
         startsAt: '',
         endsAt: '',
         location: 'School campus',
@@ -474,6 +475,7 @@ export default function ParentPortal() {
   const markNotificationRead = async (notificationId: string) => {
     try {
       await apiRequest(`/parent/notifications/${notificationId}/read`, { method: 'POST' });
+      window.dispatchEvent(new Event('popin-notifications-updated'));
       await refreshActive();
     } catch (error: any) {
       notifyAction(error.message || 'Could not mark the notification as read.', 'error');
@@ -483,6 +485,7 @@ export default function ParentPortal() {
   const markAllNotificationsRead = async () => {
     try {
       await apiRequest('/parent/notifications/read-all', { method: 'POST' });
+      window.dispatchEvent(new Event('popin-notifications-updated'));
       notifyAction('Notifications marked as read.', 'success');
       await refreshActive();
     } catch (error: any) {
@@ -703,8 +706,12 @@ export default function ParentPortal() {
                 <input className={inputClass} value={paymentDraft.reference} onChange={(event) => setPaymentDraft((current) => ({ ...current, reference: event.target.value }))} />
               </Field>
               {paymentDraft.method !== 'PAYSTACK' ? (
-                <Field label="Proof file name">
-                  <input className={inputClass} value={paymentDraft.proofFileName} onChange={(event) => setPaymentDraft((current) => ({ ...current, proofFileName: event.target.value }))} placeholder="proof-july.pdf" />
+                <Field label="Proof of payment (PDF, PNG or JPEG)">
+                  <input className={inputClass} type="file" accept="application/pdf,image/png,image/jpeg" onChange={async event => {
+                    const file = event.target.files?.[0]; if (!file) return;
+                    try { const doc = await uploadDocument(file); setPaymentDraft(current => ({ ...current, proofFileName: doc.name, proofDocumentId: doc.id })); }
+                    catch (error: any) { notifyAction(error.message, 'error'); }
+                  }} />{paymentDraft.proofFileName && <p className="text-xs">Uploaded: {paymentDraft.proofFileName}</p>}
                 </Field>
               ) : (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 md:col-span-2">
@@ -1020,7 +1027,7 @@ export default function ParentPortal() {
     }
 
     if (active === 'notifications') {
-      const notifications = Array.isArray(moduleData) ? moduleData : [];
+      const notifications = Array.isArray(moduleData) ? moduleData.filter((item: any) => !item.readAt) : [];
       return (
         <div className="space-y-4">
           <div className="flex justify-end">

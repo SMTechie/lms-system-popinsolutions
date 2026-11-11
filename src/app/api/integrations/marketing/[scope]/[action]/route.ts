@@ -1,13 +1,14 @@
+import { withWriteTransaction } from "@/src/server/prisma";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromHeader } from "@/src/server/auth";
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   { params }: { params: Promise<{ scope: string; action: string }> }
 ) {
   const user = await getCurrentUserFromHeader(request.headers.get("authorization"));
-  if (!user) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,3 +31,5 @@ export async function POST(
 
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
+
+export const POST = withWriteTransaction(POSTHandler);
