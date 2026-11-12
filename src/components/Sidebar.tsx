@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   BedDouble,
+  Bus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +14,7 @@ import {
   Mail,
   MessageCircleCode,
   Package,
+  QrCode,
   ReceiptText,
   Presentation,
   Settings,
@@ -54,7 +56,7 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Operations',
-    roles: ['ADMIN', 'TEACHER'],
+    roles: ['ADMIN', 'TEACHER', 'TRANSPORT_COORDINATOR', 'BUS_OPERATOR', 'FINANCE_OFFICER', 'RECEPTIONIST'],
     items: [
       { path: '/requisitions', label: 'Requisitions', icon: ShoppingCart, roles: ['ADMIN'] },
       { path: '/supply-chain', label: 'Supply Chain', icon: Truck, roles: ['ADMIN'] },
@@ -63,8 +65,10 @@ const navGroups: NavGroup[] = [
       { path: '/tickets', label: 'Tickets', icon: Ticket, roles: ['ADMIN', 'TEACHER'] },
       { path: '/discipline', label: 'Discipline', icon: ShieldAlert, roles: ['ADMIN', 'TEACHER'] },
       { path: '/communications', label: 'Communications', icon: Presentation, roles: ['ADMIN', 'TEACHER'] },
-      { path: '/enquiries', label: 'Enquiries & Appointments', icon: Mail, roles: ['ADMIN'] },
-      { path: '/payments', label: 'Payments', icon: ReceiptText, roles: ['ADMIN'] },
+      { path: '/enquiries', label: 'Enquiries & Appointments', icon: Mail, roles: ['ADMIN', 'RECEPTIONIST'] },
+      { path: '/payments', label: 'Payments', icon: ReceiptText, roles: ['ADMIN', 'FINANCE_OFFICER'] },
+      { path: '/transport', label: 'School Transport', icon: Bus, roles: ['ADMIN', 'TRANSPORT_COORDINATOR'] },
+      { path: '/transport/boarding', label: 'Boarding Register', icon: QrCode, roles: ['ADMIN', 'TRANSPORT_COORDINATOR', 'BUS_OPERATOR'] },
       { path: '/ai-assist', label: 'AI Assist', icon: MessageCircleCode, roles: ['ADMIN'] },
       { path: '/website', label: 'Website', icon: Globe2, roles: ['ADMIN'] },
     ],
@@ -122,7 +126,15 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         ? 'Teacher workspace'
         : activeRole === 'STUDENT'
           ? 'Student access'
-          : 'Administration';
+          : activeRole === 'TRANSPORT_COORDINATOR'
+            ? 'Transport coordination'
+            : activeRole === 'BUS_OPERATOR'
+              ? 'Bus operations'
+              : activeRole === 'FINANCE_OFFICER'
+                ? 'Finance operations'
+                : activeRole === 'RECEPTIONIST'
+                  ? 'Reception desk'
+                  : 'Administration';
   const initials = profileName
     .split(/\s+/)
     .map((part) => part[0] || '')

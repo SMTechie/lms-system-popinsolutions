@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, Clock3, CreditCard, FileSpreadsheet, Plus, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronDown, Clock3, CreditCard, Plus, Search, ShieldCheck, Wallet } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import Modal from '../components/Modal';
 import PortalLoader from '../components/PortalLoader';
@@ -27,6 +27,7 @@ export default function Payments() {
   const [paymentPage, setPaymentPage] = useState(1);
   const [planPage, setPlanPage] = useState(1);
   const [statementPage, setStatementPage] = useState(1);
+  const [showOverdueDetails, setShowOverdueDetails] = useState(false);
   const [officePayment, setOfficePayment] = useState({ learnerId: '', feeId: '', paymentType: 'SCHOOL_FEES', amount: '', method: 'CASH', reference: '', paidAt: new Date().toISOString().slice(0, 16) });
   const [plan, setPlan] = useState({
     learnerId: '',
@@ -216,16 +217,14 @@ export default function Payments() {
 
         {!loading && (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="Outstanding" value={`R ${(data?.summary?.outstanding || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`} icon={Wallet} />
               <Metric label="Overdue" value={`R ${(data?.summary?.overdue || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`} icon={AlertTriangle} tone="rose" />
               <Metric label="Collected" value={`R ${(data?.summary?.collected || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`} icon={CreditCard} />
               <Metric label="Pending verification" value={String(data?.summary?.pendingVerification || 0)} icon={Clock3} />
-              <Metric label="Rejected" value={String(data?.summary?.rejected || 0)} icon={CheckCircle2} />
-              <Metric label="Active plans" value={String(data?.summary?.activePlans || 0)} icon={FileSpreadsheet} />
             </div>
 
-            {(data?.overdueFees || []).length > 0 && <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-rose-600" /><div><h3 className="text-sm font-bold text-rose-950">Overdue fee follow-up</h3><p className="mt-1 text-xs text-rose-700">Outstanding fee items past their due date.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{data.overdueFees.slice(0, 6).map((fee: any) => <div key={fee.id} className="rounded-xl border border-rose-100 bg-white p-3"><p className="text-sm font-semibold text-slate-900">{fee.learnerName}</p><p className="mt-1 text-xs text-slate-500">{fee.term} · {fee.category} · Due {new Date(fee.dueDate).toLocaleDateString('en-ZA')}</p><p className="mt-2 text-sm font-bold text-rose-700">R {Number(fee.outstanding).toFixed(2)} outstanding</p></div>)}</div></section>}
+            {(data?.overdueFees || []).length > 0 && <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5"><button type="button" onClick={() => setShowOverdueDetails((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-rose-600" /><div><h3 className="text-sm font-bold text-rose-950">Overdue fee follow-up</h3><p className="mt-1 text-xs text-rose-700">{data.overdueFees.length} outstanding fee item(s) past their due date.</p></div></div><span className="flex items-center gap-1 text-xs font-semibold text-rose-700">{showOverdueDetails ? 'Hide details' : 'Show details'}<ChevronDown className={`h-4 w-4 transition-transform ${showOverdueDetails ? 'rotate-180' : ''}`} /></span></button>{showOverdueDetails && <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{data.overdueFees.slice(0, 6).map((fee: any) => <div key={fee.id} className="rounded-xl border border-rose-100 bg-white p-3"><p className="text-sm font-semibold text-slate-900">{fee.learnerName}</p><p className="mt-1 text-xs text-slate-500">{fee.term} · {fee.category} · Due {new Date(fee.dueDate).toLocaleDateString('en-ZA')}</p><p className="mt-2 text-sm font-bold text-rose-700">R {Number(fee.outstanding).toFixed(2)} outstanding</p></div>)}</div>}</section>}
 
             {false && <>
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -466,7 +465,18 @@ export default function Payments() {
       <Modal title="Record office payment" isOpen={showOfficePayment} onClose={() => setShowOfficePayment(false)}>
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800">Search for a learner first, then choose what the payment is for. School-fee payments are allocated to a fee item; other payments are captured against the learner for finance follow-up.</div>
-          <div className="relative"><Field label="Search learner"><input className={inputClass} value={learnerSearch} onChange={(event) => void searchLearners(event.target.value)} placeholder="Search by learner name or student number" autoComplete="off" /></Field>{learnerResults.length > 0 && <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{learnerResults.map((learner) => <button key={learner.id} type="button" onClick={() => void selectLearner(learner)} className="block w-full border-b border-slate-100 px-3 py-3 text-left text-sm transition last:border-0 hover:bg-blue-50"><span className="font-semibold text-slate-900">{learner.name}</span><span className="ml-2 text-xs text-slate-500">{learner.studentNumber}</span></button>)}</div>}</div>
+          <div className="relative">
+            <Field label="Search learner">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input className={`${inputClass} pl-9`} value={learnerSearch} onChange={(event) => void searchLearners(event.target.value)} placeholder="Type a learner name or student number..." autoComplete="off" role="combobox" aria-expanded={learnerSearch.trim().length >= 2} aria-controls="office-payment-learner-results" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+            </Field>
+            {learnerSearch.trim().length >= 2 && <div id="office-payment-learner-results" className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+              {learnerResults.length > 0 ? learnerResults.map((learner) => <button key={learner.id} type="button" onClick={() => void selectLearner(learner)} className="block w-full border-b border-slate-100 px-3 py-3 text-left text-sm transition last:border-0 hover:bg-blue-50"><span className="font-semibold text-slate-900">{learner.name}</span><span className="ml-2 text-xs text-slate-500">{learner.studentNumber}</span></button>) : <p className="px-3 py-3 text-sm text-slate-500">No learners match this search.</p>}
+            </div>}
+          </div>
           {selectedLearner && <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm"><span><b>{selectedLearner.name}</b> <span className="text-emerald-700">· {selectedLearner.studentNumber}</span></span><button type="button" onClick={() => { setSelectedLearner(null); setLearnerSearch(''); setOfficeFees([]); setOfficePayment((current) => ({ ...current, learnerId: '', feeId: '', amount: '' })); }} className="text-xs font-semibold text-emerald-700">Change</button></div>}
           <Field label="Payment type"><select className={inputClass} value={officePayment.paymentType} onChange={(event) => setOfficePayment((current) => ({ ...current, paymentType: event.target.value, feeId: '', amount: '' }))}><option value="SCHOOL_FEES">School fees</option><option value="TRANSPORT">Transport</option><option value="HOSTEL">Hostel</option><option value="UNIFORM">Uniform</option><option value="ACTIVITY">Activity / excursion</option><option value="OTHER">Other</option></select></Field>
           {officePayment.paymentType === 'SCHOOL_FEES' && <Field label="Fee item"><select className={inputClass} disabled={!selectedLearner} value={officePayment.feeId} onChange={(event) => { const fee = officeFees.find((item) => item.id === event.target.value); setOfficePayment((current) => ({ ...current, feeId: event.target.value, amount: fee?.outstanding ? String(fee.outstanding) : current.amount })); }}><option value="">{selectedLearner ? 'Select an outstanding fee' : 'Search and select a learner first'}</option>{officeFees.map((fee) => <option key={fee.id} value={fee.id}>{fee.term} {fee.category} · Outstanding R {Number(fee.outstanding).toFixed(2)}</option>)}</select></Field>}

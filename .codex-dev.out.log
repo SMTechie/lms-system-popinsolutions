@@ -1123,3 +1123,298 @@
  GET /api/parent/children/learner-1/statement 403 in 76ms
  GET /api/admin/notifications 200 in 60ms
  GET /api/admin/notifications 200 in 67ms
+ GET /api/admin/notifications 200 in 66ms
+ GET /api/parent/children/learner-seeded-8/overview 200 in 56ms
+ GET /api/parent/children/learner-seeded-1/overview 200 in 57ms
+ GET /api/parent/children/learner-seeded-3/overview 200 in 68ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 60ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 65ms
+ GET /api/admin/notifications 200 in 63ms
+ ✓ Compiled in 902ms (3216 modules)
+ GET /parent-portal 200 in 182ms
+ ✓ Compiled /api/auth/me in 167ms (1678 modules)
+ ✓ Compiled (1682 modules)
+ GET /api/public/branding 200 in 2594ms
+ GET /api/public/branding 200 in 14ms
+ GET /manifest.webmanifest 200 in 2632ms
+ GET /api/auth/me 200 in 2662ms
+ GET /api/auth/me 200 in 27ms
+ GET /api/admin/notifications 200 in 95ms
+ GET /api/parent/children 200 in 109ms
+ GET /api/admin/notifications 200 in 69ms
+ GET /api/parent/children 200 in 72ms
+ GET /api/parent/children/learner-1/overview 200 in 93ms
+ ✓ Compiled in 592ms (3225 modules)
+ GET /parent-portal 200 in 82ms
+ GET /manifest.webmanifest 200 in 34ms
+ ✓ Compiled in 668ms (3225 modules)
+ GET /parent-portal 200 in 71ms
+ GET /manifest.webmanifest 200 in 22ms
+ GET /api/admin/notifications 200 in 84ms
+ ✓ Compiled in 1138ms (3227 modules)
+ GET /parent-portal 200 in 79ms
+ GET /api/parent/children 200 in 121ms
+ GET /api/admin/notifications 200 in 124ms
+ GET /manifest.webmanifest 200 in 27ms
+ GET /api/parent/children 200 in 69ms
+ GET /api/admin/notifications 200 in 73ms
+ GET /api/parent/children 200 in 166ms
+ GET /api/admin/notifications 200 in 180ms
+ GET /api/parent/children/learner-1/overview 200 in 179ms
+ ✓ Compiled in 719ms (3227 modules)
+ GET /parent-portal 200 in 59ms
+ GET /manifest.webmanifest 200 in 27ms
+ GET /api/admin/notifications 200 in 82ms
+ ✓ Compiled in 419ms (3223 modules)
+ GET /parent-portal 200 in 57ms
+ GET /manifest.webmanifest 200 in 20ms
+ GET /api/admin/notifications 200 in 74ms
+ ✓ Compiled in 233ms (1544 modules)
+ GET /parent-portal 200 in 219ms
+ ✓ Compiled in 244ms (1544 modules)
+ GET /parent-portal 200 in 45ms
+ GET /manifest.webmanifest 200 in 109ms
+ ✓ Compiled in 988ms (3229 modules)
+ GET /parent-portal 200 in 90ms
+ GET /api/admin/notifications 200 in 475ms
+ GET /manifest.webmanifest 200 in 31ms
+ GET /api/admin/notifications 200 in 79ms
+ ✓ Compiled in 489ms (3229 modules)
+ GET /parent-portal 200 in 78ms
+ GET /manifest.webmanifest 200 in 36ms
+ ✓ Compiled in 774ms (3229 modules)
+ GET /parent-portal 200 in 60ms
+ GET /manifest.webmanifest 200 in 22ms
+ ✓ Compiled in 645ms (3229 modules)
+ GET /parent-portal 200 in 76ms
+ GET /manifest.webmanifest 200 in 34ms
+ GET /api/admin/notifications 200 in 103ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /parent-portal 200 in 145ms
+ ○ Compiling /api/pwa/icon ...
+ ✓ Compiled /api/pwa/icon in 517ms (1687 modules)
+ GET /api/pwa/icon?size=64 200 in 677ms
+ ✓ Compiled /api/auth/me in 198ms (1689 modules)
+ ✓ Compiled (1691 modules)
+ GET /api/public/branding 200 in 662ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 678ms
+ GET /api/auth/me 200 in 685ms
+ GET /api/public/branding 200 in 34ms
+ GET /api/auth/me 200 in 36ms
+ GET /api/parent/children 200 in 91ms
+ GET /api/admin/notifications 200 in 93ms
+ GET /api/parent/children 200 in 95ms
+ GET /api/admin/notifications 200 in 104ms
+ GET /api/parent/children/learner-1/overview 200 in 94ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/transport 200 in 82ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/transport 200 in 71ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/notifications 200 in 2120ms
+ GET /api/admin/notifications 200 in 66ms
+ ✓ Compiled in 876ms (3224 modules)
+ GET /transport 200 in 212ms
+ ✓ Compiled /manifest.webmanifest in 150ms (1680 modules)
+ ✓ Compiled (1686 modules)
+ GET /manifest.webmanifest 200 in 427ms
+ GET /api/public/branding 200 in 430ms
+ GET /api/auth/me 200 in 425ms
+ GET /api/public/branding 200 in 24ms
+ GET /api/auth/me 200 in 34ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/transport 400 in 2118ms
+ GET /api/admin/transport 400 in 54ms
+ ✓ Compiled in 607ms (3233 modules)
+ GET /transport 200 in 103ms
+ GET /manifest.webmanifest 200 in 41ms
+ GET /api/admin/notifications 200 in 109ms
+ GET /api/admin/notifications 200 in 57ms
+ GET /api/admin/notifications 200 in 61ms
+ GET /api/admin/notifications 200 in 76ms
+ ✓ Compiled in 682ms (3224 modules)
+ GET /transport 200 in 245ms
+ GET /api/admin/notifications 200 in 110ms
+ GET /api/admin/transport 200 in 138ms
+ GET /api/admin/notifications 200 in 68ms
+ GET /api/admin/transport 200 in 68ms
+ GET /api/admin/notifications 200 in 59ms
+ GET /api/admin/transport 200 in 72ms
+ ✓ Compiled /manifest.webmanifest in 152ms (1682 modules)
+ GET /manifest.webmanifest 200 in 258ms
+ ✓ Compiled in 357ms (3229 modules)
+ GET /transport 200 in 90ms
+ GET /api/admin/notifications 200 in 102ms
+ GET /api/admin/transport 200 in 114ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/transport 200 in 83ms
+ GET /api/admin/transport 200 in 76ms
+ GET /api/admin/notifications 200 in 87ms
+ GET /manifest.webmanifest 200 in 24ms
+ GET /api/admin/notifications 200 in 69ms
+ ✓ Compiled in 619ms (3229 modules)
+ GET /transport 200 in 54ms
+ GET /manifest.webmanifest 200 in 22ms
+ GET /api/admin/notifications 200 in 79ms
+ ✓ Compiled in 444ms (3229 modules)
+ GET /transport 200 in 71ms
+ GET /manifest.webmanifest 200 in 29ms
+ GET /api/admin/notifications 200 in 82ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/notifications 200 in 2117ms
+ GET /api/admin/notifications 200 in 65ms
+ ✓ Compiled in 889ms (3224 modules)
+ GET /transport 200 in 222ms
+ ✓ Compiled /manifest.webmanifest in 156ms (1682 modules)
+ GET /manifest.webmanifest 200 in 256ms
+ GET /api/admin/notifications 200 in 97ms
+ ✓ Compiled in 416ms (3229 modules)
+ GET /transport 200 in 98ms
+ GET /api/admin/notifications 200 in 104ms
+ GET /api/admin/notifications 200 in 58ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /manifest.webmanifest 200 in 22ms
+ GET /api/admin/transport 200 in 2136ms
+ GET /api/admin/transport 200 in 72ms
+ GET /api/admin/transport 200 in 54ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 80ms
+ ✓ Compiled in 718ms (3224 modules)
+ ✓ Compiled in 0ms (1677 modules)
+ ✓ Compiled in 0ms (1677 modules)
+ ✓ Compiled in 1ms (1677 modules)
+ GET /api/admin/notifications 200 in 859ms
+ GET /api/admin/transport 200 in 862ms
+ GET /transport 200 in 812ms
+ GET /api/admin/notifications 200 in 137ms
+ ✓ Compiled /manifest.webmanifest in 336ms (1682 modules)
+ GET /manifest.webmanifest 200 in 747ms
+ GET /api/admin/transport 200 in 766ms
+ GET /api/admin/transport 200 in 61ms
+ GET /api/admin/notifications 200 in 2660ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/admin/notifications 200 in 62ms
+ GET /api/admin/notifications 200 in 69ms
+ ✓ Compiled in 1293ms (3224 modules)
+ GET /transport 200 in 168ms
+ ✓ Compiled /manifest.webmanifest in 164ms (1682 modules)
+ GET /manifest.webmanifest 200 in 268ms
+ ✓ Compiled in 530ms (3229 modules)
+ GET /transport 200 in 95ms
+ GET /api/admin/notifications 200 in 134ms
+ GET /api/admin/transport 200 in 135ms
+ GET /manifest.webmanifest 200 in 24ms
+ ✓ Compiled in 498ms (3229 modules)
+ GET /transport 200 in 89ms
+ GET /manifest.webmanifest 200 in 43ms
+ GET /api/admin/notifications 200 in 127ms
+ GET /api/admin/transport 200 in 114ms
+ GET /api/admin/notifications 200 in 84ms
+ GET /api/admin/transport 200 in 90ms
+ ✓ Compiled in 616ms (3229 modules)
+ GET /transport 200 in 58ms
+ GET /manifest.webmanifest 200 in 24ms
+ GET /api/admin/notifications 200 in 80ms
+ ✓ Compiled in 464ms (3229 modules)
+ GET /transport 200 in 62ms
+ GET /manifest.webmanifest 200 in 25ms
+ GET /api/admin/notifications 200 in 127ms
+ GET /transport 200 in 141ms
+ ✓ Compiled /api/pwa/icon in 312ms (1687 modules)
+ GET /api/pwa/icon?size=64 200 in 524ms
+ ✓ Compiled /api/auth/me in 167ms (1689 modules)
+ ✓ Compiled (1691 modules)
+ GET /api/public/branding 200 in 435ms
+ GET /api/pwa/icon?size=64&v=0- 200 in 453ms
+ GET /api/auth/me 200 in 459ms
+ GET /api/public/branding 200 in 45ms
+ GET /api/auth/me 200 in 47ms
+ GET /api/admin/notifications 200 in 96ms
+ GET /api/admin/transport 200 in 100ms
+ GET /api/admin/notifications 200 in 76ms
+ GET /api/admin/transport 200 in 70ms
+ ✓ Compiled in 497ms (3238 modules)
+ GET /transport 200 in 109ms
+ GET /manifest.webmanifest 200 in 39ms
+ GET /api/pwa/icon?size=64 200 in 58ms
+ GET /api/pwa/icon?size=64 200 in 26ms
+ GET /api/pwa/icon?size=64 200 in 30ms
+ GET /api/pwa/icon?size=64 200 in 25ms
+ GET /api/admin/notifications 200 in 2103ms
+ ✓ Compiled in 415ms (3238 modules)
+ GET /transport 200 in 81ms
+ GET /api/admin/notifications 200 in 98ms
+ GET /api/admin/transport 200 in 106ms
+ GET /api/admin/notifications 200 in 68ms
+ GET /api/admin/transport 200 in 89ms
+ GET /api/admin/notifications 200 in 67ms
+ GET /api/admin/transport 200 in 79ms
+ GET /manifest.webmanifest 200 in 34ms
+ GET /api/pwa/icon?size=64 200 in 38ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/pwa/icon?size=64 200 in 32ms
+ GET /api/pwa/icon?size=64 200 in 27ms
+ GET /api/admin/notifications 200 in 82ms
+ GET /api/admin/payments 200 in 90ms
+ GET /api/admin/notifications 200 in 80ms
+ GET /api/admin/payments 200 in 73ms
+ ✓ Compiled in 780ms (3238 modules)
+ GET /payments 200 in 61ms
+ GET /manifest.webmanifest 200 in 49ms
+ GET /api/public/branding 200 in 53ms
+ GET /api/auth/me 200 in 74ms
+ GET /api/public/branding 200 in 31ms
+ GET /api/auth/me 200 in 42ms
+ GET /api/admin/notifications 200 in 105ms
+ GET /api/admin/payments 200 in 111ms
+ GET /api/admin/notifications 200 in 74ms
+ GET /api/admin/payments 200 in 74ms
+ GET /api/admin/finance/fees 200 in 69ms
+ GET /api/admin/finance/learners?search=df 200 in 66ms
+ GET /api/admin/finance/learners?search=dff 200 in 66ms
+ GET /api/admin/finance/learners?search=dffg 200 in 59ms
+ GET /api/admin/finance/learners?search=dff 200 in 76ms
+ GET /api/admin/finance/learners?search=df 200 in 56ms
+ GET /api/admin/finance/learners?search=ad 200 in 66ms
+ GET /api/admin/notifications 200 in 74ms
+ ✓ Compiled in 471ms (3233 modules)
+ GET /payments 200 in 124ms
+ GET /manifest.webmanifest 200 in 2070ms
+ GET /api/admin/notifications 200 in 113ms
+ GET /api/admin/transport 200 in 90ms
+ GET /api/admin/notifications 200 in 109ms
+ GET /api/admin/transport 200 in 113ms
+ ✓ Compiled in 440ms (3229 modules)
+ GET /transport 200 in 79ms
+ GET /manifest.webmanifest 200 in 45ms
+ ✓ Compiled /api/auth/me in 171ms (1684 modules)
+ ✓ Compiled (1686 modules)
+ GET /api/public/branding 200 in 403ms
+ GET /api/auth/me 200 in 409ms
+ GET /api/public/branding 200 in 37ms
+ GET /api/auth/me 200 in 45ms
+ GET /api/admin/notifications 200 in 94ms
+ GET /api/admin/transport 200 in 99ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/admin/transport 200 in 70ms
+ GET /api/admin/notifications 200 in 78ms
+ GET /api/admin/payments 200 in 72ms
+ GET /api/admin/notifications 200 in 72ms
+ GET /api/admin/payments 200 in 72ms
+ GET /api/admin/notifications 200 in 63ms
+ GET /api/admin/notifications 200 in 85ms
+ GET /api/admin/transport 200 in 86ms
+ GET /api/admin/notifications 200 in 75ms
+ GET /api/admin/transport 200 in 78ms
+ GET /api/admin/notifications 200 in 77ms
+ GET /api/admin/notifications 200 in 65ms
+ GET /api/admin/notifications 200 in 53ms
+ GET /api/admin/notifications 200 in 81ms
+ GET /api/admin/notifications 200 in 64ms
+ GET /api/admin/notifications 200 in 67ms
+ GET /api/admin/notifications 200 in 2131ms
+ GET /api/admin/notifications 200 in 79ms

@@ -41,6 +41,7 @@ const SupplyChain = lazy(() => import('./views/SupplyChain'));
 const Students = lazy(() => import('./views/Students'));
 const IdentityIntegrations = lazy(() => import('./views/IdentityIntegrations'));
 const Hostel = lazy(() => import('./views/Hostel'));
+const Transport = lazy(() => import('./views/Transport'));
 const WebsiteMaintenance = lazy(() => import('./views/WebsiteMaintenance'));
 const SchoolWebsite = lazy(() => import('./views/SchoolWebsite'));
 
@@ -75,23 +76,35 @@ const App: React.FC = () => {
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'STUDENT']} />}>
                   <Route path="/student-portal" element={<StudentPortal />} />
                 </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'TRANSPORT_COORDINATOR']} />}>
+                  <Route path="/transport" element={<Transport />} />
+                </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'TRANSPORT_COORDINATOR', 'BUS_OPERATOR']} />}>
+                  <Route path="/transport/boarding" element={<Transport />} />
+                </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'FINANCE_OFFICER']} />}>
+                  <Route path="/payments" element={<Payments />} />
+                </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'RECEPTIONIST']} />}>
+                  <Route path="/enquiries" element={<Enquiries />} />
+                </Route>
+                <Route element={<RequireAuth allowedRoles={['ADMIN', 'TEACHER', 'TRANSPORT_COORDINATOR', 'BUS_OPERATOR', 'FINANCE_OFFICER', 'RECEPTIONIST']} />}>
+                  <Route path="/" element={<Home />} />
+                </Route>
                 <Route element={<RequireAuth allowedRoles={['ADMIN', 'TEACHER']} />}>
                   <Route element={<RequireAuth allowedRoles={['ADMIN']} />}>
-                  <Route path="/" element={<Home />} />
                   <Route path="/boards" element={<Boards />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/ai-assist" element={<AIAssist />} />
                   <Route element={<RequireAuth allowedRoles={['ADMIN']} />}>
                     <Route path="/website" element={<WebsiteMaintenance />} />
                   </Route>
-                  <Route path="/payments" element={<Payments />} />
                   <Route path="/requisitions" element={<Requisitions />} />
                   <Route path="/requisitions/new" element={<RequisitionCreate />} />
                   <Route path="/requisitions/:id" element={<RequisitionDetail />} />
                   <Route path="/supply-chain" element={<SupplyChain />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/admissions" element={<Admissions />} />
-                  <Route path="/enquiries" element={<Enquiries />} />
                   <Route path="/hostel" element={<Hostel />} />
                   <Route path="/admissions/form-builder" element={<ApplicationFormBuilder />} />
                   <Route path="/settings" element={<Settings />} />

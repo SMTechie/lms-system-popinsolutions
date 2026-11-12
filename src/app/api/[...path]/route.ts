@@ -132,6 +132,10 @@ function getActiveHostelQrPass(data: any, learner: any) {
   return active || null;
 }
 
+function createLearnerQrValue(learner: any) {
+  return `POPIN-LEARNER|${learner.id}|${learner.studentNumber || "UNASSIGNED"}`;
+}
+
 function ensureHostelQrPass(data: any, learner: any) {
   data.hostel.qrPasses = data.hostel.qrPasses || [];
   const existing = getActiveHostelQrPass(data, learner);
@@ -234,6 +238,12 @@ function residentsCountFromHostel(data: any) {
 
 function addParentHostelNotification(data: any, learnerId: string, title: string, message: string) {
   data.parent.notifications = data.parent.notifications || [];
+  data.transport = data.transport || { applications: [], vehicles: [], routes: [], assignments: [], attendance: [] };
+  data.transport.applications = data.transport.applications || [];
+  data.transport.vehicles = data.transport.vehicles || [];
+  data.transport.routes = data.transport.routes || [];
+  data.transport.assignments = data.transport.assignments || [];
+  data.transport.attendance = data.transport.attendance || [];
   data.parent.notifications.unshift({
     id: uid("parent-notification"),
     learnerId,
@@ -749,14 +759,81 @@ function buildAdminAssistantResponse(data: any, prompt: string) {
 }
 
 async function handleAdmin(request: NextRequest, method: string, path: string[], data: any, operations: any, user: any) {
-  ensureRole(user, ["ADMIN"]);
-  if (path[1] === "enquiries") ensurePermission(user, "enquiries:read");
-  if (path[1] === "appointments") ensurePermission(user, "appointments:manage");
-  const users = await listAdminUsers();
+  if (path[1] === "transport") {
+    ensureRole(user, ["ADMIN", "TRANSPORT_COORDINATOR", "BUS_OPERATOR"]);
+    ensurePermission(user, method === "GET" ? "transport:read" : path[2] === "scan" ? "transport:scan" : "transport:manage");
+  } else if (path[1] === "payments" || path[1] === "finance") {
+    ensureRole(user, ["ADMIN", "FINANCE_OFFICER"]);
+    ensurePermission(user, method === "GET" ? "finance:read" : "finance:manage");
+  } else if (path[1] === "enquiries" || path[1] === "appointments") {
+    ensureRole(user, ["ADMIN", "RECEPTIONIST"]);
+    ensurePermission(user, path[1] === "enquiries" && method !== "GET" ? "enquiries:write" : path[1] === "enquiries" ? "enquiries:read" : method === "GET" ? "appointments:read" : "appointments:manage");
+  } else {
+    ensureRole(user, ["ADMIN"]);
+  }
+  const users = user.role === "ADMIN" ? await listAdminUsers() : [];
 
   if (!data.activity?.length) data.activity = buildDefaultActivity(data, operations);
-  if (!data.notifications?.length) data.notifications = buildDefaultNotifications(data, operations);
+  if (!Array.isArray(data.notifications)) data.notifications = buildDefaultNotifications(data, operations);
   if (!data.boards?.length) data.boards = createDefaultBoards(data);
+  data.transport = data.transport || { applications: [], vehicles: [], routes: [], assignments: [], attendance: [] };
+  data.transport.applications = data.transport.applications || [];
+  data.transport.vehicles = data.transport.vehicles || [];
+  data.transport.routes = data.transport.routes || [];
+  data.transport.assignments = data.transport.assignments || [];
+  data.transport.attendance = data.transport.attendance || [];
+
+  if (method === "GET" && path[1] === "transport") {
+    const applications = [...data.transport.applications]
+      .sort((a: any, b: any) => String(b.submittedAt || "").localeCompare(String(a.submittedAt || "")))
+      .map((item: any) => ({ ...item, learner: data.learners.find((learner: any) => learner.id === item.learnerId) || null }));
+    const assignments = data.transport.assignments.map((item: any) => ({ ...item, learner: data.learners.find((learner: any) => learner.id === item.learnerId), route: data.transport.routes.find((route: any) => route.id === item.routeId) }));
+    return json({ applications, vehicles: data.transport.vehicles, routes: data.transport.routes, assignments, attendance: data.transport.attendance.slice(0, 100), learners: data.learners.filter((learner: any) => learner.status === "ACTIVE").map((learner: any) => ({ id: learner.id, name: `${learner.firstName} ${learner.lastName}`, studentNumber: learner.studentNumber, qrCodeValue: learner.qrCodeValue || createLearnerQrValue(learner) })), summary: { pending: applications.filter((item: any) => item.status === "PENDING").length, approved: applications.filter((item: any) => item.status === "APPROVED").length, rejected: applications.filter((item: any) => item.status === "REJECTED").length, assigned: assignments.length } });
+  }
+
+  if (method === "POST" && path[1] === "transport" && path[2] === "vehicles") {
+    const body = await readBody(request); const registration = String(body.registration || "").trim().toUpperCase(); const capacity = Number(body.capacity);
+    if (registration.length < 3 || !Number.isInteger(capacity) || capacity < 1 || capacity > 120) return json({ error: "Enter a vehicle registration and capacity between 1 and 120." }, 400);
+    if (data.transport.vehicles.some((item: any) => item.registration === registration)) return json({ error: "That vehicle is already registered." }, 409);
+    const vehicle = { id: uid("vehicle"), registration, name: String(body.name || "").trim() || registration, capacity, driverName: String(body.driverName || "").trim(), driverPhone: String(body.driverPhone || "").trim(), status: "ACTIVE", createdAt: new Date().toISOString() }; data.transport.vehicles.unshift(vehicle); await savePortalData(data); return json(vehicle, 201);
+  }
+
+  if (method === "POST" && path[1] === "transport" && path[2] === "routes") {
+    const body = await readBody(request); const vehicle = data.transport.vehicles.find((item: any) => item.id === body.vehicleId); const name = String(body.name || "").trim();
+    if (name.length < 3 || !vehicle) return json({ error: "Enter a route name and choose an active vehicle." }, 400);
+    const route = { id: uid("route"), name, vehicleId: vehicle.id, morningTime: String(body.morningTime || "").trim(), afternoonTime: String(body.afternoonTime || "").trim(), stops: String(body.stops || "").split(",").map((item: string) => item.trim()).filter(Boolean), status: "ACTIVE", createdAt: new Date().toISOString() }; data.transport.routes.unshift(route); await savePortalData(data); return json(route, 201);
+  }
+
+  if (method === "POST" && path[1] === "transport" && path[2] === "assignments") {
+    const body = await readBody(request); const learner = data.learners.find((item: any) => item.id === body.learnerId); const route = data.transport.routes.find((item: any) => item.id === body.routeId);
+    if (!learner || !route) return json({ error: "Choose a learner and route." }, 400);
+    if (data.transport.assignments.some((item: any) => item.learnerId === learner.id && item.status === "ACTIVE")) return json({ error: "This learner already has an active transport assignment." }, 409);
+    const vehicle = data.transport.vehicles.find((item: any) => item.id === route.vehicleId); const used = data.transport.assignments.filter((item: any) => item.routeId === route.id && item.status === "ACTIVE").length;
+    if (!vehicle || used >= Number(vehicle.capacity || 0)) return json({ error: "This route has reached vehicle capacity." }, 409);
+    const assignment = { id: uid("transport-assignment"), learnerId: learner.id, routeId: route.id, stop: String(body.stop || "").trim() || route.stops[0] || "Route stop", status: "ACTIVE", assignedAt: new Date().toISOString(), assignedBy: user.email }; data.transport.assignments.unshift(assignment);
+    const application = data.transport.applications.find((item: any) => item.learnerId === learner.id && item.status === "APPROVED"); if (application) application.assignedAt = assignment.assignedAt;
+    await savePortalData(data); return json(assignment, 201);
+  }
+
+  if (method === "POST" && path[1] === "transport" && path[2] === "scan") {
+    const body = await readBody(request); const value = String(body.qrCodeValue || ""); const learner = data.learners.find((item: any) => item.qrCodeValue === value || createLearnerQrValue(item) === value); const direction = body.direction === "DROP_OFF" ? "DROP_OFF" : "BOARDING";
+    if (!learner) return json({ error: "Learner QR code was not recognised." }, 404); const assignment = data.transport.assignments.find((item: any) => item.learnerId === learner.id && item.status === "ACTIVE"); if (!assignment) return json({ error: "This learner has no active transport assignment." }, 409);
+    const log = { id: uid("transport-scan"), learnerId: learner.id, assignmentId: assignment.id, direction, scannedAt: new Date().toISOString(), scannedBy: user.email }; data.transport.attendance.unshift(log); await savePortalData(data); return json({ ...log, learnerName: learnerName(data, learner.id) }, 201);
+  }
+
+  if (method === "POST" && path[1] === "transport" && path[2] && ["approve", "reject"].includes(path[3])) {
+    const application = data.transport.applications.find((item: any) => item.id === path[2]);
+    if (!application) return json({ error: "Transport application not found." }, 404);
+    if (application.status !== "PENDING") return json({ error: "This application has already been reviewed." }, 409);
+    const body = await readBody(request);
+    application.status = path[3] === "approve" ? "APPROVED" : "REJECTED";
+    application.reviewedAt = new Date().toISOString();
+    application.reviewedBy = user.email;
+    application.reviewNote = String(body.note || "").trim().slice(0, 500);
+    data.parent.notifications.unshift({ id: uid("parent-notification"), learnerId: application.learnerId, type: "transport", title: `Transport application ${application.status.toLowerCase()}`, message: `The school ${application.status === "APPROVED" ? "approved" : "did not approve"} the transport application for ${learnerName(data, application.learnerId)}.`, createdAt: new Date().toISOString(), readAt: null });
+    await savePortalData(data);
+    return json(application);
+  }
 
   if (method === "GET" && path[1] === "dashboard") {
     return json(buildAdminDashboard(data, operations, users));
@@ -825,6 +902,12 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     return json(data.notifications);
   }
 
+  if (method === "POST" && path[1] === "notifications" && path[2] === "clear") {
+    data.notifications = [];
+    await savePortalData(data);
+    return json([]);
+  }
+
   if (method === "GET" && path[1] === "users") {
     return json(users);
   }
@@ -838,7 +921,7 @@ async function handleAdmin(request: NextRequest, method: string, path: string[],
     const role = String(body.role || "TEACHER").toUpperCase();
     if (!name || !email || !password) return json({ error: "Name, email, and password are required." }, 400);
     if (password.length < 12 || password.length > 128) return json({ error: "Use a password of 12 to 128 characters." }, 400);
-    if (!["ADMIN", "TEACHER", "PARENT", "STUDENT"].includes(role)) return json({ error: "Invalid user role." }, 400);
+    if (!["ADMIN", "TEACHER", "PARENT", "STUDENT", "TRANSPORT_COORDINATOR", "BUS_OPERATOR", "FINANCE_OFFICER", "RECEPTIONIST"].includes(role)) return json({ error: "Invalid user role." }, 400);
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return json({ error: "A user with this email already exists." }, 409);
     const created = await prisma.user.create({
@@ -1468,6 +1551,7 @@ async function handleParent(request: NextRequest, method: string, path: string[]
           viewHostelBilling: link.viewHostelBilling,
           submitHostelConcerns: link.submitHostelConcerns,
           viewHostelMovement: link.viewHostelMovement,
+          applyTransport: link.applyTransport !== false,
         },
       })),
     );
@@ -1566,6 +1650,28 @@ async function handleParent(request: NextRequest, method: string, path: string[]
         outstanding: items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.amount || 0) - Number(item.paidAmount || 0)), 0),
       },
     });
+  }
+
+  if (method === "GET" && path[1] === "children" && learnerId && path[3] === "transport") {
+    return json((data.transport.applications || []).filter((item: any) => item.learnerId === learnerId));
+  }
+
+  if (method === "POST" && path[1] === "children" && learnerId && path[3] === "transport") {
+    if (user.role === "PARENT") ensurePermission(user, "transport:apply");
+    if (user.role === "PARENT" && learnerLink?.applyTransport === false) return json({ error: "Transport applications are not enabled for this learner." }, 403);
+    const body = await readBody(request);
+    const pickupAddress = String(body.pickupAddress || "").trim();
+    const pickupContact = String(body.pickupContact || "").trim();
+    const routePreference = String(body.routePreference || "").trim();
+    if (pickupAddress.length < 8 || pickupAddress.length > 250) return json({ error: "Enter a complete pickup address." }, 400);
+    if (pickupContact.length < 5 || pickupContact.length > 100) return json({ error: "Enter a pickup contact number." }, 400);
+    if (routePreference.length < 2 || routePreference.length > 100) return json({ error: "Choose a route or area preference." }, 400);
+    const existing = data.transport.applications.find((item: any) => item.learnerId === learnerId && item.status === "PENDING");
+    if (existing) return json({ error: "A transport application is already awaiting review for this learner." }, 409);
+    const application = { id: uid("transport"), learnerId, parentEmail: user.email, pickupAddress, pickupContact, routePreference, notes: String(body.notes || "").trim().slice(0, 500), status: "PENDING", submittedAt: new Date().toISOString(), reviewedAt: null, reviewedBy: null, reviewNote: "" };
+    data.transport.applications.unshift(application);
+    await savePortalData(data);
+    return json(application, 201);
   }
 
   if (method === "GET" && path[1] === "children" && learnerId && path[3] === "fees") {
@@ -2898,6 +3004,11 @@ async function handleTeacherAssistant(request: NextRequest, method: string, path
 
 async function handleStudents(request: NextRequest, method: string, path: string[], data: any, user: any) {
   ensureRole(user, ["ADMIN", "TEACHER"]);
+  let issuedMissingQrCodes = false;
+  for (const learner of data.learners) {
+    if (!learner.qrCodeValue) { learner.qrCodeValue = createLearnerQrValue(learner); issuedMissingQrCodes = true; }
+  }
+  if (issuedMissingQrCodes) await savePortalData(data);
   const assignedClasses = data.classes.filter((item: any) => user.role === "ADMIN" || item.teacherEmail?.toLowerCase() === user.email.toLowerCase());
   const assignedLearners = data.learners.filter((learner: any) => user.role === "ADMIN" || assignedClasses.some((item: any) => learner.classId ? learner.classId === item.id : (item.learners || []).some((entry: any) => entry.id === learner.id)));
   const allowedLearnerIds = new Set(assignedLearners.map((item: any) => item.id));
@@ -2932,6 +3043,7 @@ async function handleStudents(request: NextRequest, method: string, path: string
   if (method === "POST" && path.length === 1) {
     const body = await readBody(request);
     const learner = { id: uid("learner"), status: "ACTIVE", guardians: [], classHistory: [], ...body };
+    learner.qrCodeValue = learner.qrCodeValue || createLearnerQrValue(learner);
     data.learners.unshift(learner);
     await savePortalData(data);
     return json(learner, 201);
@@ -2940,7 +3052,7 @@ async function handleStudents(request: NextRequest, method: string, path: string
   if (method === "POST" && path[1] === "import") {
     const body = await readBody(request);
     const students = Array.isArray(body.students) ? body.students : [];
-    students.forEach((student: any) => data.learners.unshift({ id: uid("learner"), status: "ACTIVE", guardians: [], classHistory: [], ...student }));
+    students.forEach((student: any) => { const learner = { id: uid("learner"), status: "ACTIVE", guardians: [], classHistory: [], ...student }; learner.qrCodeValue = learner.qrCodeValue || createLearnerQrValue(learner); data.learners.unshift(learner); });
     await savePortalData(data);
     return json({ created: students.length, rejected: 0 });
   }

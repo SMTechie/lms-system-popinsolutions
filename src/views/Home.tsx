@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { downloadDocument } from '../lib/documents';
 import {
   AlertTriangle,
+  ArrowRight,
+  Bus,
+  CalendarCheck,
   CheckSquare,
   Clock,
   DollarSign,
@@ -23,6 +26,7 @@ import PortalLoader from '../components/PortalLoader';
 import { apiRequest } from '../lib/api';
 import { notifyAction } from '../lib/notify';
 import { useBranding } from '../settings/BrandingContext';
+import { useAuth } from '../auth/AuthContext';
 
 const iconMap = {
   'Open Tasks': <CheckSquare className="h-5 w-5 text-blue-600" />,
@@ -48,6 +52,8 @@ const iconBgMap = {
 
 export default function Home() {
   const { branding } = useBranding();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [dashboard, setDashboard] = useState<any>(null);
   const [audit, setAudit] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -59,6 +65,10 @@ export default function Home() {
   const [officePayment, setOfficePayment] = useState({ feeId: '', amount: '', method: 'CASH', reference: '', paidAt: new Date().toISOString().slice(0, 16) });
 
   const load = async () => {
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [dashboardData, auditData, userData] = await Promise.all([
@@ -78,7 +88,7 @@ export default function Home() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [isAdmin]);
 
   const runAction = async (key: string, action: () => Promise<void>, success: string) => {
     setBusyKey(key);
@@ -118,6 +128,8 @@ export default function Home() {
     }
   };
 
+  if (!isAdmin) return <RoleDashboard role={user?.role || 'TEACHER'} name={user?.name || 'Team member'} />;
+
   if (loading) {
     return (
       <DashboardLayout title="Dashboard">
@@ -127,6 +139,7 @@ export default function Home() {
   }
 
   const schoolName = branding?.schoolName || 'your school';
+  const today = new Intl.DateTimeFormat('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
   const overviewCards = Array.isArray(dashboard?.overviewCards) ? dashboard.overviewCards : [];
   const pipelineCards = Array.isArray(dashboard?.pipelineCards) ? dashboard.pipelineCards : [];
   const admissions = Array.isArray(dashboard?.admissions) ? dashboard.admissions : [];
@@ -150,7 +163,7 @@ export default function Home() {
                   Admin operations hub
                 </span>
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  Friday, July 31, 2026
+                  {today}
                 </span>
               </div>
               <h2 className="mt-5 max-w-2xl font-heading text-2xl font-bold text-gray-950 sm:text-3xl">
@@ -520,6 +533,99 @@ export default function Home() {
           <button disabled={officePaymentSaving || !officePayment.feeId || !officePayment.amount || !officePayment.reference.trim()} onClick={() => void submitOfficePayment()} className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{officePaymentSaving ? 'Recording payment...' : 'Record payment for verification'}</button>
         </div>
       </Modal>
+    </DashboardLayout>
+  );
+}
+
+const roleDashboardConfig: Record<string, { label: string; title: string; description: string; endpoint?: string; actionLabel: string; actionRoute: string }> = {
+  TEACHER: {
+    label: 'Teaching workspace',
+    title: 'Your classroom, ready for today.',
+    description: 'Keep lessons, learner progress, attendance, and family communication moving from one focused place.',
+    actionLabel: 'Open teacher portal', actionRoute: '/teacher-portal',
+  },
+  TRANSPORT_COORDINATOR: {
+    label: 'Transport operations',
+    title: 'Keep every route safe and on schedule.',
+    description: 'Review enrolments, route allocations, vehicle capacity, and the latest learner movements.',
+    endpoint: '/admin/transport', actionLabel: 'Open school transport', actionRoute: '/transport',
+  },
+  BUS_OPERATOR: {
+    label: 'Bus operations',
+    title: 'Ready for safe boarding and drop-off.',
+    description: 'Use the QR boarding register to capture each learner movement clearly and quickly.',
+    endpoint: '/admin/transport', actionLabel: 'Open boarding register', actionRoute: '/transport/boarding',
+  },
+  FINANCE_OFFICER: {
+    label: 'Finance operations',
+    title: 'Keep school collections on track.',
+    description: 'Review outstanding balances, verify office payments, and keep learner statements current.',
+    endpoint: '/admin/payments', actionLabel: 'Open payments', actionRoute: '/payments',
+  },
+  RECEPTIONIST: {
+    label: 'Reception desk',
+    title: 'Stay ahead of every family enquiry.',
+    description: 'Manage incoming enquiries and appointments so every visitor receives a timely response.',
+    endpoint: '/admin/enquiries', actionLabel: 'Open enquiries', actionRoute: '/enquiries',
+  },
+};
+
+function RoleDashboard({ role, name }: { role: string; name: string }) {
+  const config = roleDashboardConfig[role] || roleDashboardConfig.TEACHER;
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(Boolean(config.endpoint));
+
+  useEffect(() => {
+    if (!config.endpoint) return;
+    let active = true;
+    void apiRequest(config.endpoint)
+      .then((result) => { if (active) setData(result); })
+      .catch(() => { if (active) setData(null); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [config.endpoint]);
+
+  const metrics = role === 'TRANSPORT_COORDINATOR' || role === 'BUS_OPERATOR'
+    ? [
+        { label: 'Pending enrolments', value: data?.summary?.pending ?? '—', icon: Clock },
+        { label: 'Approved learners', value: data?.summary?.approved ?? '—', icon: Users },
+        { label: 'Active assignments', value: data?.summary?.assigned ?? '—', icon: Bus },
+        { label: 'Latest movements', value: Array.isArray(data?.attendance) ? data.attendance.length : '—', icon: CheckSquare },
+      ]
+    : role === 'FINANCE_OFFICER'
+      ? [
+          { label: 'Outstanding', value: data?.summary?.outstanding != null ? `R ${Number(data.summary.outstanding).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—', icon: DollarSign },
+          { label: 'Overdue', value: data?.summary?.overdue != null ? `R ${Number(data.summary.overdue).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—', icon: AlertTriangle },
+          { label: 'Pending verification', value: data?.summary?.pendingVerification ?? '—', icon: Clock },
+          { label: 'Collected', value: data?.summary?.collected != null ? `R ${Number(data.summary.collected).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—', icon: TrendingUp },
+        ]
+      : role === 'RECEPTIONIST'
+        ? [
+            { label: 'New enquiries', value: Array.isArray(data?.enquiries) ? data.enquiries.filter((item: any) => item.status === 'NEW').length : '—', icon: Users },
+            { label: 'Open enquiries', value: Array.isArray(data?.enquiries) ? data.enquiries.filter((item: any) => !['RESOLVED', 'ARCHIVED'].includes(item.status)).length : '—', icon: CheckSquare },
+            { label: 'Appointments', value: Array.isArray(data?.appointments) ? data.appointments.length : '—', icon: CalendarCheck },
+          ]
+        : [
+            { label: 'Today’s focus', value: 'Classes', icon: GraduationCap },
+            { label: 'Learner support', value: 'Ready', icon: Users },
+            { label: 'Updates', value: 'Current', icon: CheckSquare },
+          ];
+
+  return (
+    <DashboardLayout title="Dashboard">
+      <div className="space-y-6">
+        <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-900 p-6 text-white shadow-sm sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[.24em] text-blue-200">{config.label}</p>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+            <div className="max-w-2xl"><h2 className="text-2xl font-bold sm:text-3xl">Welcome back, {name.split(' ')[0]}.</h2><p className="mt-2 text-sm leading-6 text-blue-100">{config.title} {config.description}</p></div>
+            <a href={config.actionRoute} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-blue-50">{config.actionLabel}<ArrowRight className="h-4 w-4" /></a>
+          </div>
+        </section>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {metrics.map(({ label, value, icon: Icon }) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><Icon className="h-5 w-5 text-blue-600" /></div><p className="mt-4 text-2xl font-bold text-slate-950">{loading ? '…' : value}</p></div>)}
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-base font-bold text-slate-950">Your next step</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Open your workspace to complete the actions assigned to your role. Information shown here is limited to the access your account has been given.</p><a href={config.actionRoute} className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-800">{config.actionLabel}<ArrowRight className="h-4 w-4" /></a></section>
+      </div>
     </DashboardLayout>
   );
 }

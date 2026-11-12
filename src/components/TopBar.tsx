@@ -88,6 +88,9 @@ const allSearchTargets = [
   { label: 'Disciplinary Module', route: '/discipline' },
   { label: 'Communications', route: '/communications' },
   { label: 'Payments', route: '/payments' },
+  { label: 'School Transport', route: '/transport' },
+  { label: 'Boarding Register', route: '/transport/boarding' },
+  { label: 'Enquiries & Appointments', route: '/enquiries' },
   { label: 'Admissions', route: '/admissions' },
   { label: 'Students', route: '/students' },
   { label: 'Hostel', route: '/hostel' },
@@ -98,11 +101,19 @@ const allSearchTargets = [
   { label: 'Identity Integrations', route: '/settings/identity-integrations' },
 ];
 
+type SearchTarget = {
+  label: string;
+  route: string;
+  detail?: string;
+  kind?: 'learner';
+};
+
 export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [learnerResults, setLearnerResults] = useState<SearchTarget[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeModal, setActiveModal] = useState<'profile' | 'preferences' | 'help' | null>(null);
   const [preferences, setPreferences] = useState({
@@ -133,19 +144,54 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
     .slice(0, 2)
     .toUpperCase();
   const unreadCount = notifications.filter((item) => !item.read).length;
-  const allowQuickCreate = !['PARENT', 'STUDENT'].includes(role);
+  const allowQuickCreate = ['ADMIN', 'TEACHER'].includes(role);
   const searchTargets =
     role === 'PARENT'
       ? allSearchTargets.filter((item) => ['/parent-portal', '/store'].includes(item.route))
       : role === 'STUDENT'
         ? allSearchTargets.filter((item) => ['/student-portal', '/store'].includes(item.route))
-      : allSearchTargets;
+        : role === 'TRANSPORT_COORDINATOR'
+          ? allSearchTargets.filter((item) => ['/transport'].includes(item.route))
+          : role === 'BUS_OPERATOR'
+            ? allSearchTargets.filter((item) => ['/transport/boarding'].includes(item.route))
+            : role === 'FINANCE_OFFICER'
+              ? allSearchTargets.filter((item) => ['/payments'].includes(item.route))
+              : role === 'RECEPTIONIST'
+                ? allSearchTargets.filter((item) => ['/enquiries'].includes(item.route))
+                : allSearchTargets;
 
   const searchResults = useMemo(() => {
     const value = search.trim().toLowerCase();
     if (!value) return [];
-    return searchTargets.filter((item) => item.label.toLowerCase().includes(value)).slice(0, 6);
-  }, [search, searchTargets]);
+    const pages: SearchTarget[] = searchTargets.filter((item) => item.label.toLowerCase().includes(value));
+    const learners = learnerResults.filter((item) => item.label.toLowerCase().includes(value) || item.detail?.toLowerCase().includes(value));
+    return [...learners, ...pages].slice(0, 8);
+  }, [learnerResults, search, searchTargets]);
+
+  useEffect(() => {
+    const query = search.trim();
+    if (!['ADMIN', 'TEACHER'].includes(role) || query.length < 2) {
+      setLearnerResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void apiRequest<any>(`/students?status=ACTIVE&search=${encodeURIComponent(query)}`)
+        .then((response) => {
+          if (cancelled) return;
+          setLearnerResults(
+            (Array.isArray(response?.items) ? response.items : []).slice(0, 5).map((learner: any) => ({
+              label: `${learner.firstName || ''} ${learner.lastName || ''}`.trim() || 'Unnamed learner',
+              detail: `Learner · ${learner.studentNumber || 'No student number'}`,
+              route: `/students?search=${encodeURIComponent(query)}`,
+              kind: 'learner' as const,
+            })),
+          );
+        })
+        .catch(() => { if (!cancelled) setLearnerResults([]); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [role, search]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('popin_user_preferences');
@@ -256,7 +302,8 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
                           onClick={() => openRoute(item.route, `Opened ${item.label}.`)}
                           className="w-full px-4 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
                         >
-                          {item.label}
+                          <span className="block font-medium text-gray-800">{item.label}</span>
+                          {item.detail && <span className="mt-0.5 block text-xs text-gray-500">{item.detail}</span>}
                         </button>
                       </li>
                     ))}
@@ -322,20 +369,39 @@ export default function TopBar({ onMobileMenuOpen, title }: TopBarProps) {
                 <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
                   <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                     <span className="text-sm font-semibold text-gray-900">Notifications</span>
-                    <button
-                      className="text-xs font-medium text-blue-600 hover:underline"
-                      onClick={async () => {
-                        try {
-                          const endpoint = `${notificationEndpoint}/read-all`;
-                          const items = await apiRequest<NotificationItem[]>(endpoint, { method: 'POST' });
-                          setNotifications((Array.isArray(items) ? items : []).map((item) => withNotificationRoute(item, role)));
-                        } catch (error: any) {
-                          notifyAction(error.message || 'Could not mark notifications as read.', 'error');
-                        }
-                      }}
-                    >
-                      Mark all read
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                        onClick={async () => {
+                          try {
+                            const endpoint = `${notificationEndpoint}/read-all`;
+                            const items = await apiRequest<NotificationItem[]>(endpoint, { method: 'POST' });
+                            setNotifications((Array.isArray(items) ? items : []).map((item) => withNotificationRoute(item, role)));
+                          } catch (error: any) {
+                            notifyAction(error.message || 'Could not mark notifications as read.', 'error');
+                          }
+                        }}
+                      >
+                        Mark all read
+                      </button>
+                      {role === 'ADMIN' && notifications.length > 0 && (
+                        <button
+                          className="text-xs font-medium text-red-600 hover:underline"
+                          onClick={async () => {
+                            if (!window.confirm('Clear all notifications? This cannot be undone.')) return;
+                            try {
+                              await apiRequest(`${notificationEndpoint}/clear`, { method: 'POST' });
+                              setNotifications([]);
+                              notifyAction('Notifications cleared.', 'success');
+                            } catch (error: any) {
+                              notifyAction(error.message || 'Could not clear notifications.', 'error');
+                            }
+                          }}
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <ul className="max-h-80 divide-y divide-gray-50 overflow-y-auto">
                     {notifications.map((item) => (

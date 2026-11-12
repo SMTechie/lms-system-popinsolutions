@@ -5,6 +5,7 @@ import {
   BedDouble,
   Bell,
   BookOpen,
+  Bus,
   CalendarDays,
   ClipboardCheck,
   FileText,
@@ -45,6 +46,7 @@ const sections: readonly SectionDefinition[] = [
   { key: 'announcements', label: 'Announcements', icon: MessageSquare, permission: 'receiveAnnouncements' },
   { key: 'fees', label: 'School Fees', icon: BadgeCheck, permission: 'viewFees' },
   { key: 'statement', label: 'Learner Statement', icon: Receipt, permission: 'viewFees' },
+  { key: 'transport', label: 'School Transport', icon: Bus, permission: 'applyTransport' },
   { key: 'applications', label: 'Applications', icon: FileText, permission: 'submitApplications' },
   { key: 'hostel', label: 'Hostel', icon: BedDouble, permission: 'viewHostel' },
   { key: 'appointments', label: 'Appointments', icon: CalendarDays, permission: 'bookAppointments' },
@@ -70,6 +72,7 @@ const learnerRequiredSections = new Set<SectionKey>([
   'announcements',
   'fees',
   'statement',
+  'transport',
   'applications',
   'hostel',
   'appointments',
@@ -108,6 +111,7 @@ export default function ParentPortal() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [excuseDrafts, setExcuseDrafts] = useState<Record<string, string>>({});
   const [applicationDraft, setApplicationDraft] = useState({ formId: '', notes: '' });
+  const [transportDraft, setTransportDraft] = useState({ pickupAddress: '', pickupContact: '', routePreference: '', notes: '' });
 
   const selected = children.find((item) => item?.learner?.id === selectedId);
   const currentSection = sections.find((section) => section.key === active) || null;
@@ -175,6 +179,7 @@ export default function ParentPortal() {
         else if (active === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
         else if (active === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
         else if (active === 'statement') payload = await apiRequest(`/parent/children/${selectedId}/statement`);
+        else if (active === 'transport') payload = await apiRequest(`/parent/children/${selectedId}/transport`);
         else if (active === 'applications') {
           const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
           payload = { items, forms };
@@ -231,6 +236,7 @@ export default function ParentPortal() {
       else if (section === 'discipline') payload = await apiRequest(`/parent/children/${selectedId}/discipline`);
       else if (section === 'fees') payload = await apiRequest(`/parent/children/${selectedId}/fees`);
       else if (section === 'statement') payload = await apiRequest(`/parent/children/${selectedId}/statement`);
+      else if (section === 'transport') payload = await apiRequest(`/parent/children/${selectedId}/transport`);
       else if (section === 'applications') {
         const [items, forms] = await Promise.all([apiRequest(`/parent/children/${selectedId}/applications`), apiRequest(`/parent/children/${selectedId}/applications/forms`)]);
         payload = { items, forms };
@@ -394,6 +400,18 @@ export default function ParentPortal() {
       await refreshActive();
     } catch (error: any) {
       notifyAction(error.message || 'Could not submit the application.', 'error');
+    }
+  };
+
+  const submitTransportApplication = async () => {
+    if (!selectedId) return;
+    try {
+      await apiRequest(`/parent/children/${selectedId}/transport`, { method: 'POST', body: JSON.stringify(transportDraft) });
+      notifyAction('Transport application submitted for school review.', 'success');
+      setTransportDraft({ pickupAddress: '', pickupContact: '', routePreference: '', notes: '' });
+      await refreshActive();
+    } catch (error: any) {
+      notifyAction(error.message || 'Could not submit the transport application.', 'error');
     }
   };
 
@@ -757,6 +775,12 @@ export default function ParentPortal() {
           </SectionCard>
         </div>
       );
+    }
+
+    if (active === 'transport') {
+      const applications = Array.isArray(moduleData) ? moduleData : [];
+      const pending = applications.some((item: any) => item.status === 'PENDING');
+      return <div className="space-y-5"><div className="rounded-2xl border border-blue-100 bg-blue-50 p-5"><div className="flex items-start gap-3"><Bus className="mt-0.5 h-5 w-5 text-blue-700" /><div><p className="text-sm font-bold text-slate-950">School transport enrolment</p><p className="mt-1 text-sm text-slate-600">Submit your learner’s pickup details. The transport office will approve or decline the request and notify you here.</p></div></div></div>{!pending && <SectionCard title="Apply for school transport"><div className="grid gap-3 md:grid-cols-2"><Field label="Pickup address"><input className={inputClass} value={transportDraft.pickupAddress} onChange={(event) => setTransportDraft((current) => ({ ...current, pickupAddress: event.target.value }))} placeholder="Street address and suburb" /></Field><Field label="Pickup contact number"><input className={inputClass} value={transportDraft.pickupContact} onChange={(event) => setTransportDraft((current) => ({ ...current, pickupContact: event.target.value }))} placeholder="Parent or emergency contact" /></Field><Field label="Route or area preference"><input className={inputClass} value={transportDraft.routePreference} onChange={(event) => setTransportDraft((current) => ({ ...current, routePreference: event.target.value }))} placeholder="Example: Midrand morning route" /></Field><Field label="Notes (optional)"><input className={inputClass} value={transportDraft.notes} onChange={(event) => setTransportDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Pickup instructions or accessibility needs" /></Field></div><button onClick={() => void submitTransportApplication()} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Submit transport application</button></SectionCard>}<SectionCard title="Application status">{applications.length ? <div className="space-y-3">{applications.map((item: any) => <div key={item.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-slate-900">{item.routePreference}</p><p className="mt-1 text-sm text-slate-600">{item.pickupAddress}</p><p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.submittedAt).toLocaleDateString('en-ZA')}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' : item.status === 'REJECTED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{item.status}</span></div>{item.reviewNote && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">School note: {item.reviewNote}</p>}</div>)}</div> : <EmptyState text="No transport applications have been submitted for this learner." />}</SectionCard></div>;
     }
 
     if (active === 'applications') {

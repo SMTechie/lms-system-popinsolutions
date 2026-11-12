@@ -25,6 +25,11 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
@@ -33,6 +38,7 @@
     "@iconify/react": "^6.0.2",
     "@prisma/client": "^5.22.0",
     "@radix-ui/themes": "^3.2.1",
+    "@zxing/browser": "^0.2.1",
     "animejs": "^4.1.2",
     "autoprefixer": "^10.4.19",
     "bcryptjs": "^2.4.3",
@@ -43,20 +49,20 @@
     "globals": "^16.4.0",
     "jose": "^6.1.0",
     "lucide-react": "^0.462.0",
-    "next": "^15.2.4",
+    "next": "^16.4.6",
     "postcss": "^8.4.49",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.53.0",
     "react-resizable-panels": "^2.1.3",
-    "react-router-dom": "^6.23.0",
+    "react-router-dom": "^7.18.5",
     "react-toastify": "^11.0.5",
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.5.3",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
@@ -65,12 +71,12 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "eslint": "^9.35.0",
-    "eslint-config-next": "^15.2.4",
+    "eslint-config-next": "^16.4.6",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "~5.8.3",
-    "typescript-eslint": "^8.43.0"
+    "typescript-eslint": "^8.36.0"
   }
 }

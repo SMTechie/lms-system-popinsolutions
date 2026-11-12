@@ -19,7 +19,13 @@ const adminPermissions = [
   "communications:manage",
   "admissions:manage",
   "enquiries:read",
-  "appointments:manage"
+  "appointments:manage",
+  "finance:read",
+  "finance:manage",
+  "transport:read",
+  "transport:manage",
+  "transport:scan",
+  "transport:apply"
 ] as const;
 
 export function getPermissionsForRole(role: string) {
@@ -28,7 +34,7 @@ export function getPermissionsForRole(role: string) {
   }
 
   if (role === "PARENT") {
-    return ["parent_portal:read", "parent_portal:acknowledge", "store:read", "tickets:read"];
+    return ["parent_portal:read", "parent_portal:acknowledge", "transport:apply", "store:read", "tickets:read"];
   }
 
   if (role === "TEACHER") {
@@ -45,6 +51,22 @@ export function getPermissionsForRole(role: string) {
       "teacher_portal:read",
       "teacher_portal:write"
     ];
+  }
+
+  if (role === "TRANSPORT_COORDINATOR") {
+    return ["transport:read", "transport:manage", "transport:scan"];
+  }
+
+  if (role === "BUS_OPERATOR") {
+    return ["transport:read", "transport:scan"];
+  }
+
+  if (role === "FINANCE_OFFICER") {
+    return ["finance:read", "finance:manage"];
+  }
+
+  if (role === "RECEPTIONIST") {
+    return ["enquiries:read", "enquiries:write", "appointments:read", "appointments:manage"];
   }
 
   if (role === "STUDENT") {

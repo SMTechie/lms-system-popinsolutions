@@ -73,6 +73,7 @@ export function defaultPortalData() {
     viewHostelBilling: true,
     submitHostelConcerns: true,
     viewHostelMovement: true,
+    applyTransport: true,
   }));
   const classes = [
     {

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Archive, ArrowRightLeft, Download, GraduationCap, ImagePlus, Link2, Plus, Search, Upload, UserRound, Users } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
 import { apiRequest } from "../lib/api";
 import { notifyAction } from "../lib/notify";
 import { useAuth } from "../auth/AuthContext";
+import { QRCodeSVG } from "qrcode.react";
 
 const emptyStudent = {
   firstName: "",
@@ -37,6 +39,7 @@ const permissionKeys = [
   "viewHostelBilling",
   "submitHostelConcerns",
   "viewHostelMovement",
+  "applyTransport",
 ];
 
 const newGuardian = () => ({
@@ -49,9 +52,10 @@ const newGuardian = () => ({
 
 export default function Students() {
   const { user } = useAuth();
+  const location = useLocation();
   const isAdmin = user?.role === "ADMIN";
   const [data, setData] = useState<any>({ items: [], grades: [], classes: [], subjects: [] });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get("search") || "");
   const [status, setStatus] = useState("ACTIVE");
   const [selected, setSelected] = useState<any>(null);
   const [editing, setEditing] = useState<any>(null);
@@ -84,6 +88,15 @@ export default function Students() {
   useEffect(() => {
     void load();
   }, [status]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search).get("search") || "";
+    if (query !== search) setSearch(query);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (search) void load();
+  }, [search]);
 
   const items = Array.isArray(data?.items) ? data.items : [];
   const grades = Array.isArray(data?.grades) ? data.grades : [];
@@ -477,6 +490,8 @@ export default function Students() {
             </div>
 
             {selected.photoUrl && <div className="flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4"><img src={selected.photoUrl} alt={`${selected.firstName} ${selected.lastName}`} className="h-20 w-20 rounded-xl object-cover" /><div><p className="text-xs font-bold uppercase tracking-wide text-gray-500">Student picture</p><p className="mt-1 text-sm text-gray-700">Profile picture attached to this student record.</p></div></div>}
+
+            {selected.qrCodeValue && <section className="flex flex-wrap items-center gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4"><div className="rounded-xl bg-white p-2"><QRCodeSVG value={selected.qrCodeValue} size={96} includeMargin /></div><div><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Learner QR code</p><p className="mt-1 text-sm font-semibold text-slate-900">Generated automatically for this learner</p><p className="mt-1 break-all text-xs text-slate-500">{selected.qrCodeValue}</p></div></section>}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center justify-between gap-3">
