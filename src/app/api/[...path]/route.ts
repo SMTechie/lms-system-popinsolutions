@@ -42,6 +42,10 @@ import { addTeacherNotification, assignedTeacherEmail, isNotificationRecipient, 
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
+// The API uses Prisma and Node's crypto module, so keep it on the Node.js
+// runtime when it is deployed as a Vercel Function.
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest, context: RouteContext) {
   // The student hostel view can issue an initial access pass.
   if ((await context.params).path[0] === "student") return withWriteTransaction(handle)(request, context);
@@ -70,10 +74,17 @@ async function handle(request: NextRequest, { params }: RouteContext) {
   const method = request.method;
   const data = await getPortalData();
   const operations = await getOperationsData();
-  if (route === "jobs/run" && method === "POST") {
-    const configured = process.env.JOBS_SECRET || "";
+  if (route === "jobs/run" && ["GET", "POST"].includes(method)) {
+    // POST is used by the local Docker worker. Vercel Cron invokes this route
+    // with GET and supplies CRON_SECRET as a Bearer token. Supporting both
+    // keeps local development and the serverless production deployment aligned.
     const supplied = request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
-    if (configured.length < 24 || configured.length !== supplied.length || !timingSafeEqual(Buffer.from(configured), Buffer.from(supplied))) return json({ error: "Unauthorized" }, 401);
+    const configuredSecrets = [process.env.JOBS_SECRET, process.env.CRON_SECRET]
+      .filter((secret): secret is string => Boolean(secret && secret.length >= 24));
+    const authorized = configuredSecrets.some((secret) =>
+      secret.length === supplied.length && timingSafeEqual(Buffer.from(secret), Buffer.from(supplied)),
+    );
+    if (!authorized) return json({ error: "Unauthorized" }, 401);
     ensureCommunicationsData(data);
     let processed = 0;
     for (const campaign of data.communications.campaigns.filter((item: any) => ["SCHEDULED", "RETRY"].includes(item.status) && new Date(item.nextAttemptAt || item.scheduledFor).getTime() <= Date.now()).slice(0, 5)) {

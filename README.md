@@ -159,7 +159,8 @@ Use these project settings:
 - Root Directory: `.`
 - Framework Preset: `Next.js`
 - Install Command: `npm install`
-- Build Command: `npm run build`
+- Build Command: configured in `vercel.json`. Production deployments apply
+  `npm run db:migrate` before `npm run build`; preview deployments only build.
 
 Set these environment variables in Vercel:
 
@@ -168,6 +169,8 @@ Set these environment variables in Vercel:
 - `NEXT_PUBLIC_AUTH_BYPASS=false`
 - `NEXT_PUBLIC_APP_URL`
 - `APP_URL`
+- `JOBS_SECRET` (a unique random value of at least 24 characters)
+- `CRON_SECRET` (a different unique random value of at least 24 characters)
 
 If you are enabling live integrations, also set:
 
@@ -185,7 +188,16 @@ If you are enabling live integrations, also set:
 Notes:
 
 - Prisma client generation is automated during `postinstall`, which is Vercel-safe.
-- Run `npm run db:migrate` against the production database before the first production deploy, or from your release pipeline.
+- Production Vercel deployments run `npm run db:migrate` before the build. The
+  migration command is safe to rerun because Prisma records applied migrations.
+- The Vercel Cron configuration calls `/api/jobs/run` hourly in production to
+  dispatch scheduled communications, process queued assessment work, and clear
+  expired security records. Vercel supplies `CRON_SECRET` as its bearer token;
+  do not use the local Docker worker in Vercel.
+- To deploy automatically from GitHub pushes, configure the `production`
+  environment secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+  `VERCEL_PROJECT_ID`. The `Deploy Vercel Production` workflow deploys every
+  push to `main`.
 - Run `npm run db:seed` only if you intentionally want seeded records in that environment.
 - Set the Paystack callback to `https://your-domain.vercel.app/parent-portal/payment-callback` or a custom domain equivalent.
 - Set the Twilio status callback to `https://your-domain.vercel.app/api/webhooks/twilio/status`.
