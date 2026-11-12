@@ -190,7 +190,7 @@ Notes:
 - Prisma client generation is automated during `postinstall`, which is Vercel-safe.
 - Production Vercel deployments run `npm run db:migrate` before the build. The
   migration command is safe to rerun because Prisma records applied migrations.
-- The Vercel Cron configuration calls `/api/jobs/run` hourly in production to
+- The Vercel Cron configuration calls `/api/jobs/run` daily at midnight UTC in production to
   dispatch scheduled communications, process queued assessment work, and clear
   expired security records. Vercel supplies `CRON_SECRET` as its bearer token;
   do not use the local Docker worker in Vercel.
